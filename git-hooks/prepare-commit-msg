@@ -1,0 +1,22 @@
+#!/bin/bash
+# Git hook to remove Claude co-author line from commit messages
+# This ensures commits are attributed only to the developer
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Only process if this is a new commit (not amend, merge, etc.)
+if [ -z "$COMMIT_SOURCE" ] || [ "$COMMIT_SOURCE" = "message" ]; then
+  # Remove Claude co-author lines
+  sed -i.bak '/Co-Authored-By: Claude/d' "$COMMIT_MSG_FILE"
+  sed -i.bak '/Co-Authored-By: Claude Sonnet/d' "$COMMIT_MSG_FILE"
+  sed -i.bak '/Co-Authored-By: Claude Opus/d' "$COMMIT_MSG_FILE"
+  sed -i.bak '/Co-Authored-By: Claude Haiku/d' "$COMMIT_MSG_FILE"
+
+  # Remove the Claude Code footer line if it exists
+  sed -i.bak '/🤖 Generated with.*Claude Code/d' "$COMMIT_MSG_FILE"
+  sed -i.bak '/Generated with \[Claude Code\]/d' "$COMMIT_MSG_FILE"
+
+  # Clean up backup file
+  rm -f "$COMMIT_MSG_FILE.bak"
+fi

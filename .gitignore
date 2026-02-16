@@ -1,0 +1,28 @@
+# Personal overrides
+*.local
+*.backup
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Local testing
+test-output/
+scratch/
+
+# Environment-specific (should not be in team config)
+.env
+.env.local
+
+# Personal notes
+NOTES.md
+TODO.md

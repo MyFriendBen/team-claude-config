@@ -1,0 +1,199 @@
+{
+  "$schema": "https://storage.googleapis.com/anthropic-claude-code/hooks-schema.json",
+  "version": "1.0",
+  "hooks": {
+    "file_created": [
+      {
+        "name": "format_python",
+        "description": "Auto-format Python files with ruff",
+        "enabled": true,
+        "command": "cd <mfb-workspace> && ruff format {file}",
+        "pattern": "benefits-api/**/*.py",
+        "blocking": false,
+        "auto_fix": true
+      },
+      {
+        "name": "lint_python",
+        "description": "Lint Python files and auto-fix issues",
+        "enabled": true,
+        "command": "cd <mfb-workspace> && ruff check --fix {file}",
+        "pattern": "benefits-api/**/*.py",
+        "blocking": false,
+        "auto_fix": true
+      },
+      {
+        "name": "type_check_python",
+        "description": "Type check Python files with mypy",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-api && mypy {file}",
+        "pattern": "benefits-api/**/*.py",
+        "blocking": true,
+        "auto_fix": false
+      },
+      {
+        "name": "test_new_program",
+        "description": "Run tests for newly created program",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-api && pytest {file} -v",
+        "pattern": "benefits-api/programs/tests/test_*.py",
+        "blocking": true,
+        "auto_fix": false
+      },
+      {
+        "name": "format_typescript",
+        "description": "Auto-format TypeScript/TSX files with Prettier",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-calculator && npx prettier --write {file}",
+        "pattern": "benefits-calculator/**/*.{ts,tsx}",
+        "blocking": false,
+        "auto_fix": true
+      },
+      {
+        "name": "lint_typescript",
+        "description": "Lint TypeScript/TSX files with ESLint",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-calculator && npx eslint --fix {file}",
+        "pattern": "benefits-calculator/**/*.{ts,tsx}",
+        "blocking": false,
+        "auto_fix": true
+      },
+      {
+        "name": "type_check_typescript",
+        "description": "Type check TypeScript files",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-calculator && npx tsc --noEmit",
+        "pattern": "benefits-calculator/**/*.{ts,tsx}",
+        "blocking": true,
+        "auto_fix": false
+      }
+    ],
+    "file_modified": [
+      {
+        "name": "format_python_modified",
+        "description": "Auto-format modified Python files",
+        "enabled": true,
+        "command": "cd <mfb-workspace> && ruff format {file}",
+        "pattern": "benefits-api/**/*.py",
+        "blocking": false,
+        "auto_fix": true
+      },
+      {
+        "name": "lint_python_modified",
+        "description": "Lint modified Python files",
+        "enabled": true,
+        "command": "cd <mfb-workspace> && ruff check --fix {file}",
+        "pattern": "benefits-api/**/*.py",
+        "blocking": false,
+        "auto_fix": true
+      },
+      {
+        "name": "type_check_modified",
+        "description": "Type check modified Python files",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-api && mypy {file}",
+        "pattern": "benefits-api/**/*.py",
+        "blocking": true,
+        "auto_fix": false
+      },
+      {
+        "name": "rerun_tests_modified",
+        "description": "Re-run tests when test files are modified",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-api && pytest {file} -v --tb=short",
+        "pattern": "benefits-api/programs/tests/test_*.py",
+        "blocking": true,
+        "auto_fix": false
+      },
+      {
+        "name": "test_related_calculator",
+        "description": "Run tests when calculator is modified",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-api && pytest programs/tests/test_{basename}.py -v",
+        "pattern": "benefits-api/programs/calculators/*.py",
+        "blocking": true,
+        "auto_fix": false
+      },
+      {
+        "name": "format_typescript_modified",
+        "description": "Auto-format modified TypeScript files",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-calculator && npx prettier --write {file}",
+        "pattern": "benefits-calculator/**/*.{ts,tsx}",
+        "blocking": false,
+        "auto_fix": true
+      },
+      {
+        "name": "lint_typescript_modified",
+        "description": "Lint modified TypeScript files",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-calculator && npx eslint --fix {file}",
+        "pattern": "benefits-calculator/**/*.{ts,tsx}",
+        "blocking": false,
+        "auto_fix": true
+      },
+      {
+        "name": "test_related_component",
+        "description": "Run tests when component is modified",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-calculator && npm test -- {basename}.test",
+        "pattern": "benefits-calculator/src/**/*.tsx",
+        "blocking": false,
+        "auto_fix": false
+      }
+    ],
+    "before_commit": [
+      {
+        "name": "lint_staged_backend",
+        "description": "Lint only staged backend Python files",
+        "enabled": true,
+        "command": "cd <mfb-workspace> && git diff --cached --name-only --diff-filter=ACM 'benefits-api/**/*.py' | xargs -r ruff check",
+        "pattern": "benefits-api/**/*.py",
+        "blocking": true,
+        "auto_fix": false
+      },
+      {
+        "name": "type_check_staged_backend",
+        "description": "Type check only staged backend Python files",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-api && git diff --cached --name-only --diff-filter=ACM --relative '*.py' | xargs -r mypy",
+        "pattern": "benefits-api/**/*.py",
+        "blocking": true,
+        "auto_fix": false
+      },
+      {
+        "name": "test_affected_programs",
+        "description": "Run tests for programs affected by staged changes",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-api && pytest programs/tests/ -v --tb=short",
+        "pattern": "benefits-api/programs/**/*.py",
+        "blocking": true,
+        "auto_fix": false,
+        "comment": "You can optimize this further to only run tests for changed programs"
+      },
+      {
+        "name": "lint_staged_frontend",
+        "description": "Lint only staged frontend TypeScript files",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-calculator && git diff --cached --name-only --diff-filter=ACM --relative 'src/**/*.{ts,tsx}' | xargs -r npx eslint",
+        "pattern": "benefits-calculator/src/**/*.{ts,tsx}",
+        "blocking": true,
+        "auto_fix": false
+      },
+      {
+        "name": "type_check_staged_frontend",
+        "description": "Type check frontend (checks all due to TypeScript dependency graph)",
+        "enabled": true,
+        "command": "cd <mfb-workspace>/benefits-calculator && npx tsc --noEmit",
+        "pattern": "benefits-calculator/src/**/*.{ts,tsx}",
+        "blocking": true,
+        "auto_fix": false,
+        "comment": "TypeScript must check all files due to type dependencies"
+      }
+    ]
+  },
+  "settings": {
+    "continue_on_error": false,
+    "timeout_seconds": 120,
+    "show_output": true
+  }
+}
