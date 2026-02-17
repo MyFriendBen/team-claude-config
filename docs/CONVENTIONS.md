@@ -258,9 +258,9 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ### CLAUDE.md Placement
 
 - **Team config** (`team-claude-config/CLAUDE.md`) - Shared patterns for all MFB projects
-- **Workspace** (`~/code/mfb/CLAUDE.md`) - Symlinked to team config
-- **Project-specific** (`benefits-be/CLAUDE.md`) - Backend-only instructions
-- **Project-specific** (`benefits-fe/CLAUDE.md`) - Frontend-only instructions
+- **Workspace** (`<mfb-workspace>/CLAUDE.md`) - Symlinked to team config
+- **Project-specific** (`benefits-api/CLAUDE.md`) - Backend-only instructions
+- **Project-specific** (`benefits-calculator/CLAUDE.md`) - Frontend-only instructions
 
 ### Adding New Patterns
 

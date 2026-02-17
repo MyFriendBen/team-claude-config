@@ -1,6 +1,6 @@
 # Team Commands Directory
 
-This directory contains custom Claude Code commands for MyFriendBen projects. These are **project-level commands** that get symlinked to `~/code/mfb/.claude/commands/` and are available when working in the mfb workspace.
+This directory contains custom Claude Code commands for MyFriendBen projects. These are **project-level commands** that get symlinked to `<mfb-workspace>/.claude/commands/` and are available when working in the mfb workspace.
 
 ## Available Commands
 
@@ -20,7 +20,7 @@ Systematically review and respond to CodeRabbit feedback on pull requests.
 
 ## How Project Commands Work
 
-Claude Code looks for custom commands in `.claude/commands/` within your project directory. When you symlink this directory to `~/code/mfb/.claude/commands/`, these commands become available when working in any MyFriendBen repo under the mfb workspace.
+Claude Code looks for custom commands in `.claude/commands/` within your project directory. When you symlink this directory to `<mfb-workspace>/.claude/commands/`, these commands become available when working in any MyFriendBen repo under the mfb workspace.
 
 ## Command File Format
 
@@ -60,7 +60,7 @@ When you create a useful command for MyFriendBen projects:
 3. **Test locally**
    ```bash
    # Commands are automatically available via symlink
-   cd ~/code/mfb
+   cd <mfb-workspace>
    # Test by running: /your-command-name
    ```
 
@@ -97,7 +97,7 @@ Consider creating commands for MyFriendBen-specific workflows:
 
 ## Project-Level vs Global
 
-- **Project-level** (this directory): Commands specific to MyFriendBen, symlinked to `~/code/mfb/.claude/commands/`
+- **Project-level** (this directory): Commands specific to MyFriendBen, symlinked to `<mfb-workspace>/.claude/commands/`
 - **Global**: Commands for any project, stored in `~/.claude/skills/`
 
 Since `/add-program` is specific to MyFriendBen's Django architecture, it belongs here as a project-level command.

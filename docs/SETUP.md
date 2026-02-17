@@ -6,9 +6,39 @@ This guide will help you set up your local development environment to use the sh
 
 - Claude Code CLI installed (`npm install -g @anthropic/claude-code`)
 - Git configured with GitHub access
-- MyFriendBen workspace directory at `~/code/mfb/`
+- MyFriendBen workspace directory (e.g., `~/code/mfb/` or your chosen location)
 
-## One-Time Setup
+## Quick Setup (Recommended)
+
+The easiest way to get started is using the automated setup script:
+
+```bash
+# Clone the team config repo
+git clone git@github.com:your-org/team-claude-config.git ~/code/team-claude-config
+
+# Run the setup script
+cd ~/code/team-claude-config
+./setup.sh <mfb-workspace> <backend-repo> <frontend-repo>
+
+# Example:
+./setup.sh ~/code/mfb benefits-be benefits-fe
+```
+
+**What it does:**
+- ✅ Creates all symlinks (CLAUDE.md, commands/)
+- ✅ Sets up hooks.json with your paths
+- ✅ Installs git hooks for proper attribution
+- ✅ Safe to run multiple times
+
+Done! You're ready to use Claude Code. See the [main README](../README.md) for next steps.
+
+---
+
+## Manual Setup (Alternative)
+
+If you prefer to set things up manually or need more control, follow these detailed steps:
+
+### One-Time Setup
 
 ### Step 1: Clone Team Config Repo
 
@@ -21,14 +51,14 @@ git clone git@github.com:your-org/team-claude-config.git
 
 ```bash
 # Backup existing CLAUDE.md if present
-if [ -f ~/code/mfb/CLAUDE.md ]; then
-  mv ~/code/mfb/CLAUDE.md ~/code/mfb/CLAUDE.md.backup
+if [ -f <mfb-workspace>/CLAUDE.md ]; then
+  mv <mfb-workspace>/CLAUDE.md <mfb-workspace>/CLAUDE.md.backup
   echo "Backed up existing CLAUDE.md"
 fi
 
 # Backup existing commands if present
-if [ -d ~/code/mfb/.claude/commands ]; then
-  mv ~/code/mfb/.claude/commands ~/code/mfb/.claude/commands.backup
+if [ -d <mfb-workspace>/.claude/commands ]; then
+  mv <mfb-workspace>/.claude/commands <mfb-workspace>/.claude/commands.backup
   echo "Backed up existing commands"
 fi
 ```
@@ -37,13 +67,13 @@ fi
 
 ```bash
 # Symlink CLAUDE.md to your mfb workspace
-ln -s ~/code/team-claude-config/CLAUDE.md ~/code/mfb/CLAUDE.md
+ln -s <team-config-path>/CLAUDE.md <mfb-workspace>/CLAUDE.md
 
 # Create .claude directory in mfb if it doesn't exist
-mkdir -p ~/code/mfb/.claude
+mkdir -p <mfb-workspace>/.claude
 
 # Symlink shared commands (project-level)
-ln -s ~/code/team-claude-config/commands ~/code/mfb/.claude/commands
+ln -s <team-config-path>/commands <mfb-workspace>/.claude/commands
 ```
 
 ### Step 4: Set Up Hooks (Automated Quality Gates)
@@ -53,14 +83,14 @@ Hooks automatically run formatters, linters, and tests when you create or modify
 1. **Copy and customize hooks template**:
    ```bash
    # Copy template to your workspace
-   cp ~/code/team-claude-config/hooks.json.template ~/code/mfb/.claude/hooks.json
+   cp <team-config-path>/hooks.json.template <mfb-workspace>/.claude/hooks.json
 
    # Replace placeholder with your actual mfb workspace path
-   # On macOS:
-   sed -i '' 's|<mfb-workspace>|'$HOME'/code/mfb|g' ~/code/mfb/.claude/hooks.json
+   # Example for macOS (replace with your actual path):
+   sed -i '' 's|<mfb-workspace>|/Users/yourusername/code/mfb|g' <mfb-workspace>/.claude/hooks.json
 
-   # On Linux:
-   sed -i 's|<mfb-workspace>|'$HOME'/code/mfb|g' ~/code/mfb/.claude/hooks.json
+   # Example for Linux (replace with your actual path):
+   sed -i 's|<mfb-workspace>|/home/yourusername/code/mfb|g' <mfb-workspace>/.claude/hooks.json
    ```
 
 2. **What hooks do**:
@@ -85,7 +115,7 @@ Hooks automatically run formatters, linters, and tests when you create or modify
    - Type check all staged files (backend + frontend)
 
 3. **Customize if needed**:
-   - Edit `~/code/mfb/.claude/hooks.json`
+   - Edit `<mfb-workspace>/.claude/hooks.json`
    - Set `enabled: false` to disable specific hooks
    - Adjust `blocking: true/false` to make hooks non-blocking
    - Modify commands for your specific setup
@@ -94,15 +124,15 @@ Hooks automatically run formatters, linters, and tests when you create or modify
 
 ```bash
 # Check CLAUDE.md is linked
-ls -la ~/code/mfb/CLAUDE.md
-# Should show: CLAUDE.md -> ~/code/team-claude-config/CLAUDE.md
+ls -la <mfb-workspace>/CLAUDE.md
+# Should show: CLAUDE.md -> <team-config-path>/CLAUDE.md
 
 # Check commands are linked
-ls -la ~/code/mfb/.claude/commands
-# Should show: commands -> ~/code/team-claude-config/commands
+ls -la <mfb-workspace>/.claude/commands
+# Should show: commands -> <team-config-path>/commands
 
 # Test in Claude Code
-cd ~/code/mfb
+cd <mfb-workspace>
 # Start Claude Code - /add-program should now be available
 ```
 
@@ -138,7 +168,7 @@ Keep these in `~/.claude/keybindings.json`:
 
 Create personal experimental commands outside the team commands:
 ```bash
-mkdir -p ~/code/mfb/.claude/personal-commands
+mkdir -p <mfb-workspace>/.claude/personal-commands
 # Add your experimental commands here
 # These won't be shared with the team
 ```
@@ -184,10 +214,10 @@ gh pr create --title "Add new command for X" --body "Description of what this do
 
 ## Working with Multiple Projects
 
-The symlinked `~/code/mfb/CLAUDE.md` will be used by Claude Code when working in:
-- `~/code/mfb/benefits-be/`
-- `~/code/mfb/benefits-fe/`
-- Any other repos under `~/code/mfb/`
+The symlinked CLAUDE.md will be used by Claude Code when working in:
+- `<mfb-workspace>/benefits-api/`
+- `<mfb-workspace>/benefits-calculator/`
+- Any other repos under `<mfb-workspace>/`
 
 Individual repos can have their own `CLAUDE.md` for project-specific additions.
 
@@ -197,32 +227,32 @@ Individual repos can have their own `CLAUDE.md` for project-specific additions.
 
 ```bash
 # Check if symlink exists
-ls -la ~/code/mfb/CLAUDE.md
+ls -la <mfb-workspace>/CLAUDE.md
 
 # If broken, recreate it
-rm ~/code/mfb/CLAUDE.md
-ln -s ~/code/team-claude-config/CLAUDE.md ~/code/mfb/CLAUDE.md
+rm <mfb-workspace>/CLAUDE.md
+ln -s <team-config-path>/CLAUDE.md <mfb-workspace>/CLAUDE.md
 ```
 
 ### Commands Not Available
 
 ```bash
 # Check commands symlink
-ls -la ~/code/mfb/.claude/commands
+ls -la <mfb-workspace>/.claude/commands
 
 # If broken, recreate it
-rm ~/code/mfb/.claude/commands
-ln -s ~/code/team-claude-config/commands ~/code/mfb/.claude/commands
+rm <mfb-workspace>/.claude/commands
+ln -s <team-config-path>/commands <mfb-workspace>/.claude/commands
 ```
 
 ### Want to Use Your Own CLAUDE.md
 
 ```bash
 # Remove symlink
-rm ~/code/mfb/CLAUDE.md
+rm <mfb-workspace>/CLAUDE.md
 
 # Copy shared version as starting point
-cp ~/code/team-claude-config/CLAUDE.md ~/code/mfb/CLAUDE.md
+cp <team-config-path>/CLAUDE.md <mfb-workspace>/CLAUDE.md
 
 # Edit as needed (but you won't get automatic updates)
 ```

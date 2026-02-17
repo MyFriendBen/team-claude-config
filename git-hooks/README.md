@@ -17,13 +17,24 @@ Automatically removes Claude co-author lines from commit messages to ensure prop
 
 ## Setup Instructions
 
-### Per-Repository Setup
+### Automated Setup (Recommended)
 
-For each repository where you want to use these hooks:
+The easiest way to set up git hooks is to use the main setup script:
+
+```bash
+cd <team-config-path>
+./setup.sh <mfb-workspace> [backend-repo] [frontend-repo]
+```
+
+This automatically installs git hooks in your backend and frontend repositories.
+
+### Manual Per-Repository Setup
+
+If you need to set up hooks manually for a specific repository:
 
 ```bash
 # Navigate to your repository
-cd <mfb-workspace>/benefits-api  # or benefits-calculator
+cd <mfb-workspace>/benefits-be  # or benefits-fe
 
 # Copy the hook
 cp <team-config-path>/git-hooks/prepare-commit-msg .git/hooks/
@@ -34,7 +45,7 @@ chmod +x .git/hooks/prepare-commit-msg
 
 ### Global Setup (All Repositories)
 
-To use these hooks in all your repositories:
+To use these hooks in **all** repositories on your machine (not recommended):
 
 ```bash
 # Set global git hooks directory
@@ -44,28 +55,7 @@ git config --global core.hooksPath <team-config-path>/git-hooks
 chmod +x <team-config-path>/git-hooks/*
 ```
 
-**Note:** Global setup applies to ALL repositories on your machine, not just MyFriendBen projects.
-
-### Automated Setup Script
-
-You can create a script to set up hooks for all MyFriendBen repos:
-
-```bash
-#!/bin/bash
-# setup-git-hooks.sh
-
-MFB_WORKSPACE="<mfb-workspace>"
-HOOKS_DIR="<team-config-path>/git-hooks"
-
-for repo in benefits-api benefits-calculator; do
-  if [ -d "$MFB_WORKSPACE/$repo/.git" ]; then
-    echo "Setting up hooks for $repo..."
-    cp "$HOOKS_DIR/prepare-commit-msg" "$MFB_WORKSPACE/$repo/.git/hooks/"
-    chmod +x "$MFB_WORKSPACE/$repo/.git/hooks/prepare-commit-msg"
-    echo "✅ $repo hooks configured"
-  fi
-done
-```
+**Warning:** Global setup applies to ALL repositories on your machine, not just MyFriendBen projects.
 
 ## How It Works
 

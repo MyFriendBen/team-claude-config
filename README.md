@@ -43,11 +43,38 @@ Team documentation:
 
 ## Setup Instructions
 
-**Note:** Replace placeholders with your actual paths:
-- `<team-config-path>` - Where you clone this repo (e.g., `~/projects/team-claude-config`)
-- `<mfb-workspace>` - Your MyFriendBen workspace directory (e.g., `~/work/mfb` or `~/code/mfb`)
+### Quick Setup (Recommended)
 
-### One-Time Setup
+Use the automated setup script:
+
+```bash
+# Clone this repo
+git clone git@github.com:your-org/team-claude-config.git <team-config-path>
+
+# Run setup script
+cd <team-config-path>
+./setup.sh <mfb-workspace> [backend-repo] [frontend-repo]
+
+# Examples:
+./setup.sh ~/code/mfb
+./setup.sh ~/code/mfb benefits-be benefits-fe
+./setup.sh ~/work/mfb my-backend my-frontend
+```
+
+**What the script does:**
+- ✅ Creates all necessary symlinks (CLAUDE.md, commands/)
+- ✅ Sets up hooks.json with your paths
+- ✅ Installs git hooks for proper attribution
+- ✅ Idempotent (safe to run multiple times)
+- ✅ Interactive confirmation before changes
+
+### Manual Setup
+
+**Note:** Replace placeholders with your actual paths:
+- `<team-config-path>` - Where you clone this repo (e.g., `~/projects/team-claude-config` or `~/dev/team-claude-config`)
+- `<mfb-workspace>` - Your MyFriendBen workspace directory (e.g., `~/work/mfb`, `~/code/mfb`, or `~/projects/mfb`)
+
+#### One-Time Setup
 
 1. **Clone this repo**
    ```bash
@@ -133,13 +160,20 @@ Team documentation:
 
 ### Staying Updated
 
-Pull the latest team changes regularly:
+When the team adds new commands or updates configurations:
+
 ```bash
 cd <team-config-path>
 git pull origin main
+
+# If new commands were added, re-run setup (safe, idempotent)
+./setup.sh <mfb-workspace>
 ```
 
-Changes automatically apply to your mfb workspace via the symlinks.
+Changes automatically apply via symlinks. Re-running setup ensures:
+- New git hooks are installed
+- Hooks.json includes new patterns
+- All symlinks are correct
 
 ## Contributing
 
@@ -182,6 +216,7 @@ When you discover a useful pattern or command:
 
 ```
 team-claude-config/
+├── setup.sh                           # 🚀 Automated setup script (run this!)
 ├── CLAUDE.md                          # Shared base instructions
 ├── hooks.json.template                # Automated quality gates (format, lint, test)
 ├── git-hooks/                         # Git hooks for proper attribution
@@ -192,7 +227,7 @@ team-claude-config/
 │   ├── add-program.md                # Benefit program implementation
 │   └── coderabbit-comment-review.md  # PR review response workflow
 ├── docs/                              # Team documentation
-│   ├── SETUP.md                      # Setup guide
+│   ├── SETUP.md                      # Manual setup guide
 │   └── CONVENTIONS.md                # Team standards
 └── README.md                          # This file
 ```
