@@ -296,7 +296,7 @@ Next steps:
 Read from `commands/check-program-links/templates/`:
 - `export_programs.sql` - SQL query for exporting programs
 - `check_link_status.py` - Python script to check HTTP status
-- `update_links_template.sql` - Example SQL UPDATE structure
+- `example_update_links.sql` - Example SQL UPDATE statements with real data
 
 ### Output Files (generated in project directory)
 - `programs_export.csv` - Exported programs

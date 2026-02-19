@@ -10,7 +10,7 @@ check-program-links/
 ├── templates/                          # Reusable templates
 │   ├── export_programs.sql            # SQL query to export programs
 │   ├── check_link_status.py           # Python script to check HTTP status
-│   └── update_links_template.sql      # Example SQL UPDATE statements
+│   └── example_update_links.sql       # Example SQL UPDATE statements
 └── examples/                           # Example outputs
     └── example_workflow.md            # Example session walkthrough
 ```
@@ -29,9 +29,10 @@ When `/check-program-links` is invoked:
    - Claude checks HTTP status of each URL (using requests library)
    - Can be run directly or used as reference for inline implementation
 
-3. **SQL update template** (`templates/update_links_template.sql`)
-   - Claude generates UPDATE statements for broken links
-   - Saves to project directory as `update_links.sql`
+3. **SQL update example** (`templates/example_update_links.sql`)
+   - Shows format of generated UPDATE statements
+   - Real examples from previous run for reference
+   - Claude generates new `update_links.sql` in project directory
    - User manually reviews and executes the SQL
 
 ## Database Connection
