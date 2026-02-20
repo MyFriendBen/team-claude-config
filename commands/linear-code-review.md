@@ -1,15 +1,21 @@
 ---
 name: linear-code-review
-description: Pull all tickets in Code Review column from Linear, review associated PRs, and generate comprehensive reviews with diagrams and staff-level insights.
-usage: /linear-code-review
+description: Pull all tickets in Code Review column from Linear (or a specific ticket), review associated PRs, and generate comprehensive reviews with diagrams and staff-level insights.
+usage: /linear-code-review [ticket-number]
 example: /linear-code-review
+example2: /linear-code-review MFB-123
 ---
 
 <command-name>linear-code-review</command-name>
 
 # Linear Code Review - Comprehensive PR Analysis Workflow
 
-Automatically discovers all Linear tickets in the "Code Review" state, analyzes their associated Pull Requests, and generates comprehensive, junior-dev-friendly reviews with visual diagrams, analogies, and staff-level technical insights.
+Automatically discovers all Linear tickets in the "Code Review" state (or analyzes a specific ticket), reviews their associated Pull Requests, and generates comprehensive, junior-dev-friendly reviews with visual diagrams, analogies, and staff-level technical insights.
+
+## Usage Modes
+
+1. **Review all tickets**: `/linear-code-review` - Reviews all tickets in "Code Review" state
+2. **Review specific ticket**: `/linear-code-review MFB-123` - Reviews only the specified ticket
 
 ## Core Principles
 
@@ -26,16 +32,26 @@ Automatically discovers all Linear tickets in the "Code Review" state, analyzes 
 
 **Linear Workspace Configuration:**
 - This command queries the "MFB - Web" **team** (not project) in Linear
-- It looks for issues with state "Code Review"
+- It looks for issues with state "Code Review" (or a specific ticket if provided)
 - No manual discovery needed - these values are hardcoded for the MyFriendBen workspace
 
 1. **Announce start of workflow**
+
+   **If no ticket number provided (review all):**
    ```
    🔍 Starting Code Review PR Discovery...
    Searching Linear for tickets in "Code Review" state in "MFB - Web" team...
    ```
 
-2. **Query Linear for tickets in Code Review**
+   **If ticket number provided (review one):**
+   ```
+   🔍 Starting Code Review for MFB-123...
+   Fetching ticket details from Linear...
+   ```
+
+2. **Query Linear for tickets**
+
+   **Mode A: Review all tickets in Code Review**
    - Use Linear MCP to list issues with these exact parameters:
      - **team**: "MFB - Web" (this is a team name, not a project)
      - **state**: "Code Review"
@@ -50,6 +66,12 @@ Automatically discovers all Linear tickets in the "Code Review" state, analyzes 
      ```
    - **Important**: Use the `team` parameter, NOT `project`. "MFB - Web" is a Linear team.
 
+   **Mode B: Review specific ticket**
+   - Use Linear MCP to get single issue:
+     - Call `mcp__Linear__get_issue` with the ticket ID (e.g., "MFB-123")
+     - No state filtering needed - reviews the ticket regardless of state
+   - Skip to step 3 with this single ticket
+
 3. **Extract PR links from each ticket**
    - For each Linear issue found:
      - Use `mcp__Linear__get_issue` to get full issue details
@@ -58,6 +80,8 @@ Automatically discovers all Linear tickets in the "Code Review" state, analyzes 
    - Handle multiple PRs per ticket
 
 4. **Present discovery summary**
+
+   **Mode A: All tickets**
    ```
    Found 5 tickets in Code Review:
 
@@ -75,10 +99,26 @@ Automatically discovers all Linear tickets in the "Code Review" state, analyzes 
    Total: 5 tickets, 7 PRs
    ```
 
+   **Mode B: Single ticket**
+   ```
+   Ticket MFB-123: Add SNAP eligibility calculator
+   State: Code Review
+   PRs found: #456, #457
+
+   Total: 1 ticket, 2 PRs
+   ```
+
 5. **CHECKPOINT 1: Confirm before proceeding**
+
+   **Mode A: All tickets**
    - Ask: "Ready to review all 7 PRs? This will generate comprehensive reviews. (y/n)"
    - If no, ask if user wants to select specific tickets
    - If yes, proceed to Phase 2
+
+   **Mode B: Single ticket**
+   - Ask: "Ready to review 2 PRs for MFB-123? (y/n)"
+   - If yes, proceed to Phase 2
+   - If no, exit
 
 ### Phase 2: PR Analysis (Automated, per PR)
 
@@ -94,8 +134,8 @@ For each PR found:
 2. **Determine repository context**
    - Check which repo the PR belongs to
    - Set review perspective:
-     - `benefits-be/` → Backend (Django/Python)
-     - `benefits-fe/` → Frontend (React/TypeScript)
+     - `benefits-api/` → Backend (Django/Python)
+     - `benefits-calculator/` → Frontend (React/TypeScript)
      - Data-related paths → Data Engineering
    - Can have mixed changes (e.g., both frontend and backend)
 
@@ -435,6 +475,21 @@ Possible reasons:
 - Team name or state changed
 
 Check Linear workspace to verify.
+```
+
+### If Specific Ticket Not Found
+
+```
+❌ Error: Ticket MFB-999 not found
+
+Checked Linear workspace for ticket "MFB-999" but it doesn't exist.
+
+Possible reasons:
+- Ticket ID is incorrect (check spelling/number)
+- Ticket has been deleted
+- Ticket is in a different workspace
+
+Verify the ticket ID and try again.
 ```
 
 ### If Ticket Has No PRs

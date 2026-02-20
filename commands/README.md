@@ -19,10 +19,12 @@ Systematically review and respond to CodeRabbit feedback on pull requests.
 **Details:** See [coderabbit-comment-review.md](coderabbit-comment-review.md)
 
 ### `/linear-code-review`
-Pull all tickets in Code Review column from Linear, review associated PRs, and generate comprehensive reviews with diagrams and staff-level insights.
+Pull all tickets in Code Review column from Linear (or a specific ticket), review associated PRs, and generate comprehensive reviews with diagrams and staff-level insights.
 
-**Usage:** `/linear-code-review`
-**Example:** `/linear-code-review`
+**Usage:** `/linear-code-review [ticket-number]`
+**Examples:**
+- `/linear-code-review` - Review all tickets in Code Review
+- `/linear-code-review MFB-123` - Review only MFB-123
 **Details:** See [linear-code-review.md](linear-code-review.md)
 
 ## How Project Commands Work

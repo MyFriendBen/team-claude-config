@@ -58,7 +58,7 @@ cd <team-config-path>
 
 # Examples:
 ./setup.sh ~/code/mfb
-./setup.sh ~/code/mfb benefits-be benefits-fe
+./setup.sh ~/code/mfb benefits-api benefits-calculator
 ./setup.sh ~/work/mfb my-backend my-frontend
 ```
 
