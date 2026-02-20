@@ -716,16 +716,6 @@ pull-request-reviews/
 - Reviews are **saved locally** - team can reference and learn from them
 - Multiple PRs per ticket are **common** - handle gracefully
 
-## Future Enhancements
-
-Potential improvements for future versions:
-
-- Post review summaries as PR comments (optional)
-- Track review history over time
-- Generate team learning docs from common patterns
-- Integration with CodeRabbit for automated follow-up
-- Metrics dashboard (common issues, review time, etc.)
-
 ---
 
 **Remember**: The goal is to help the whole team (especially junior developers) understand the code deeply, catch issues early, and maintain high quality standards. Reviews should be thorough but kind, technical but accessible.

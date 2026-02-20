@@ -27,6 +27,13 @@ Pull all tickets in Code Review column from Linear (or a specific ticket), revie
 - `/linear-code-review MFB-123` - Review only MFB-123
 **Details:** See [linear-code-review.md](linear-code-review.md)
 
+**Future Enhancements:**
+- Post review summaries as PR comments (optional)
+- Track review history over time
+- Generate team learning docs from common patterns
+- Integration with CodeRabbit for automated follow-up
+- Metrics dashboard (common issues, review time, etc.)
+
 ## How Project Commands Work
 
 Claude Code looks for custom commands in `.claude/commands/` within your project directory. When you symlink this directory to `<mfb-workspace>/.claude/commands/`, these commands become available when working in any MyFriendBen repo under the mfb workspace.
