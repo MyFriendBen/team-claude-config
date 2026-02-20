@@ -18,6 +18,13 @@ Systematically review and respond to CodeRabbit feedback on pull requests.
 **Example:** `/coderabbit-comment-review 123`
 **Details:** See [coderabbit-comment-review.md](coderabbit-comment-review.md)
 
+### `/linear-code-review`
+Pull all tickets in Code Review column from Linear, review associated PRs, and generate comprehensive reviews with diagrams and staff-level insights.
+
+**Usage:** `/linear-code-review`
+**Example:** `/linear-code-review`
+**Details:** See [linear-code-review.md](linear-code-review.md)
+
 ## How Project Commands Work
 
 Claude Code looks for custom commands in `.claude/commands/` within your project directory. When you symlink this directory to `<mfb-workspace>/.claude/commands/`, these commands become available when working in any MyFriendBen repo under the mfb workspace.

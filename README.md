@@ -22,6 +22,7 @@ Shared instructions for Claude Code when working with MyFriendBen projects. This
 Custom Claude Code commands for MyFriendBen projects:
 - `/add-program` - Implements new benefit programs from Linear tickets
 - `/coderabbit-comment-review` - Systematically respond to CodeRabbit PR feedback
+- `/linear-code-review` - Review all PRs in Linear's Code Review column with comprehensive analysis
 - Add your own project-specific commands here as the team develops them
 
 ### `hooks.json.template`
