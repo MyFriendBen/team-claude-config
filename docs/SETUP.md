@@ -96,7 +96,7 @@ Hooks automatically run formatters, linters, and tests when you create or modify
 2. **What hooks do**:
 
    **file_created** - When you create new files:
-   - Auto-format Python with ruff
+   - Auto-format Python with black
    - Lint Python with ruff --fix
    - Type check Python with mypy
    - Run tests for new test files

@@ -88,6 +88,7 @@ Implements a new benefit program following the MyFriendBen Django architecture p
    - Are any helper methods required?
    - Do any PolicyEngine calculations apply?
    - What translations are needed?
+   - Does a `has_[program]` field need to be added to Screen? (see Step 3.4)
 
 3. **Create Implementation Plan**
    - Map eligibility criteria to Django model fields
@@ -158,7 +159,44 @@ Implements a new benefit program following the MyFriendBen Django architecture p
 4. **Calculate benefit value** based on Linear ticket research
 5. **Document calculation logic** in docstring with source references
 
-#### Step 3.4: Create Translations
+#### Step 3.4: Implement has_[benefit] (when applicable)
+
+If this program needs to be tracked as a benefit a user may already hold:
+
+**Backend (`benefits-be/`):**
+
+1. Add field to Screen model (`screener/models.py`):
+   ```python
+   has_[program] = models.BooleanField(default=False, blank=True, null=True)
+   ```
+2. Add mapping in `Screen.has_benefit()` (same file):
+   ```python
+   "[program_name_abbreviated]": self.has_[program],
+   ```
+3. Add `"has_[program]"` to the `fields` tuple in `ScreenSerializer` (`screener/serializers.py`)
+4. Generate migration:
+   ```bash
+   python manage.py makemigrations screener
+   ```
+
+5. Add to the white label config (`configuration/white_labels/[state].py`) `category_benefits` section — this is what makes the checkbox appear in the screener (follow the existing pattern for other benefits in the same category)
+
+**Frontend (`benefits-fe/`):**
+
+1. `src/Types/ApiFormData.ts` — add the field type:
+   ```typescript
+   has_[program]: boolean | null;
+   ```
+2. `src/Assets/updateScreen.ts` — add to the `benefits` mapping (sends form data → API):
+   ```typescript
+   has_[program]: formData.benefits.[program] ?? null,
+   ```
+3. `src/Assets/updateFormData.tsx` — add to the `benefits` object (maps API response → form state):
+   ```typescript
+   [program]: response.has_[program] ?? false,
+   ```
+
+#### Step 3.5: Create Translations
 
 1. **Read existing translation files** to understand structure:
    ```bash
@@ -180,7 +218,27 @@ Implements a new benefit program following the MyFriendBen Django architecture p
 
 4. **Use clear, accessible language** - avoid jargon where possible
 
-#### Step 3.5: Generate Tests
+#### Step 3.6: Create Validation JSON File
+
+The `import_validations` management command uses JSON files from `validations/management/commands/import_validations/data/` to create regression test scenarios. **Always create this file** from the test cases in the Linear ticket.
+
+1. **Read the schema and example** to understand the required format:
+   ```bash
+   Read: benefits-be/validations/management/commands/import_validations/test_case_schema.json
+   Read: benefits-be/validations/management/commands/import_validations/test_case_example.json
+   ```
+
+2. **Look at existing files** for similar programs to follow conventions:
+   ```bash
+   Glob: benefits-be/validations/management/commands/import_validations/data/*.json
+   ```
+
+3. **Create** `benefits-be/validations/management/commands/import_validations/data/[state]_[program].json`
+   - One JSON object per test case from the Linear ticket (both eligible and ineligible scenarios)
+   - Each object: `notes`, `household` (full household data per schema), `expected_results`
+   - If `has_[program]` was added, include it in the `household` object (default `false` for eligible scenarios)
+
+#### Step 3.7: Generate Tests
 
 1. **Read existing test files** to understand testing patterns:
    ```bash
@@ -230,10 +288,28 @@ Implements a new benefit program following the MyFriendBen Django architecture p
    mypy benefits-be/programs/calculators/csfp_il.py
    ```
 
-4. **Lint Checks**
+4. **Lint Check** — run black against changed files following the same approach as `benefits-be/.github/workflows/format.yaml`
+
+5. **Import and Run Validations Locally**
+
+   Import the validation JSON file created in Step 3.6:
    ```bash
-   ruff check benefits-be/programs/
+   cd benefits-be && python manage.py import_validations validations/management/commands/import_validations/data/[state]_[program].json
    ```
+
+   Then run the validations to confirm they all pass:
+   ```bash
+   python manage.py validate --program [program_name_abbreviated]
+   ```
+
+   Use `--hide-skipped` to suppress programs not yet in the DB. Filter by white label if needed:
+   ```bash
+   python manage.py validate --program [program_name_abbreviated] --white-label [state_code] --hide-skipped
+   ```
+
+   - `Passed` count should match the number of test cases imported
+   - `Failed` count must be 0
+   - If you suspect a test case is failing because of an issue with the validation (and not the calculator), prompt the user before taking action
 
 ### Phase 5: Commit & Review
 
@@ -268,12 +344,7 @@ Implements a new benefit program following the MyFriendBen Django architecture p
 
    Create PR with:
    - **Title**: "Add [PROGRAM] program ([State])"
-   - **Body**:
-     - Summary of what the program does
-     - List of changes (model, calculator, translations, tests)
-     - Link to Linear ticket
-     - Test plan checklist
-     - Testing results (all tests passing)
+   - **Body**: Follow `benefits-be/.github/pull_request_template.md`
 
    Use `gh pr create` or GitHub UI to create the PR.
 
@@ -341,7 +412,7 @@ Do NOT commit failing code.
 
 All these checks run automatically via hooks (see `.claude/hooks.json`):
 
-- ✅ Ruff formatting and linting
+- ✅ Black formatting
 - ✅ MyPy type checking
 - ✅ Django model validation
 - ✅ Test coverage >90%
@@ -363,9 +434,10 @@ All these checks run automatically via hooks (see `.claude/hooks.json`):
 
 - ✅ All tests passing (pytest)
 - ✅ Type checking clean (mypy)
-- ✅ Linting clean (ruff)
+- ✅ Linting clean (black)
 - ✅ Coverage >90%
 - ✅ Translations complete
+- ✅ Validations imported and passing locally
 - ✅ Clear commit message
 - ✅ PR created with test plan
 

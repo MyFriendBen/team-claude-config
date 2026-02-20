@@ -4,10 +4,10 @@
   "hooks": {
     "file_created": [
       {
-        "name": "format_python",
-        "description": "Auto-format Python files with ruff",
+        "name": "black_format",
+        "description": "Auto-format Python files with black (matches CI in format.yaml)",
         "enabled": true,
-        "command": "cd <mfb-workspace> && ruff format {file}",
+        "command": "cd <mfb-workspace>/benefits-api && black {file}",
         "pattern": "benefits-api/**/*.py",
         "blocking": false,
         "auto_fix": true
@@ -69,10 +69,10 @@
     ],
     "file_modified": [
       {
-        "name": "format_python_modified",
-        "description": "Auto-format modified Python files",
+        "name": "black_format_modified",
+        "description": "Auto-format modified Python files with black (matches CI in format.yaml)",
         "enabled": true,
-        "command": "cd <mfb-workspace> && ruff format {file}",
+        "command": "cd <mfb-workspace>/benefits-api && black {file}",
         "pattern": "benefits-api/**/*.py",
         "blocking": false,
         "auto_fix": true
