@@ -24,17 +24,21 @@ print_warning() { echo -e "${YELLOW}⚠ $1${NC}"; }
 
 # Print usage
 usage() {
-    echo "Usage: $0 <mfb-workspace> [backend-repo] [frontend-repo]"
+    echo "Usage: $0 [--update-hooks] <mfb-workspace> [backend-repo] [frontend-repo]"
     echo ""
     echo "Arguments:"
     echo "  mfb-workspace     Path to your MyFriendBen workspace (required)"
     echo "  backend-repo      Name of backend repo (default: benefits-api)"
     echo "  frontend-repo     Name of frontend repo (default: benefits-calculator)"
     echo ""
+    echo "Options:"
+    echo "  --update-hooks    Force-refresh hooks.json from template and exit"
+    echo ""
     echo "Examples:"
     echo "  $0 ~/code/mfb"
     echo "  $0 ~/work/mfb benefits-be benefits-fe"
     echo "  $0 /Users/dev/projects/mfb"
+    echo "  $0 --update-hooks ~/code/mfb"
     echo ""
     echo "What this script does:"
     echo "  - Creates symlinks for CLAUDE.md and commands/"
@@ -102,6 +106,13 @@ create_symlink() {
 
 # Main setup function
 main() {
+    # Parse --update-hooks flag
+    UPDATE_HOOKS_ONLY=false
+    if [ "${1:-}" = "--update-hooks" ]; then
+        UPDATE_HOOKS_ONLY=true
+        shift
+    fi
+
     # Parse arguments
     if [ $# -lt 1 ]; then
         usage
@@ -152,6 +163,43 @@ main() {
         print_info "Please create it first: mkdir -p $1"
         exit 1
     }
+
+    # Handle --update-hooks: copy template, substitute, and exit
+    if [ "$UPDATE_HOOKS_ONLY" = true ]; then
+        HOOKS_FILE="$MFB_WORKSPACE/.claude/hooks.json"
+        mkdir -p "$MFB_WORKSPACE/.claude"
+
+        echo ""
+        if [ -f "$HOOKS_FILE" ]; then
+            print_warning "This will overwrite your existing hooks.json:"
+            echo "  $HOOKS_FILE"
+            echo ""
+            read -p "Proceed? (y/n) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_warning "Update cancelled"
+                exit 0
+            fi
+            echo ""
+        fi
+
+        print_info "Updating hooks.json from template..."
+        cp "$SCRIPT_DIR/hooks.json.template" "$HOOKS_FILE"
+
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s|<mfb-workspace>|$MFB_WORKSPACE|g" "$HOOKS_FILE"
+            sed -i '' "s|benefits-api|$BACKEND_REPO|g" "$HOOKS_FILE"
+            sed -i '' "s|benefits-calculator|$FRONTEND_REPO|g" "$HOOKS_FILE"
+        else
+            sed -i "s|<mfb-workspace>|$MFB_WORKSPACE|g" "$HOOKS_FILE"
+            sed -i "s|benefits-api|$BACKEND_REPO|g" "$HOOKS_FILE"
+            sed -i "s|benefits-calculator|$FRONTEND_REPO|g" "$HOOKS_FILE"
+        fi
+
+        print_success "hooks.json updated at $HOOKS_FILE"
+        echo ""
+        exit 0
+    fi
 
     echo ""
     echo "======================================"
