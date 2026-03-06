@@ -396,7 +396,7 @@ await page.waitForTimeout(2000);
 **Step 10: Referral Source**
 ```javascript
 await page.locator("#referral-source-select").click();
-await page.getByRole("option", { name: "Google or other search engine" }).click();
+await page.getByRole("option", { name: "Test / Prospective Partner" }).click();
 await page.getByRole("button", { name: "Continue" }).click();
 await page.waitForTimeout(2000);
 ```
