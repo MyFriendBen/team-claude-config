@@ -61,6 +61,9 @@ cd <team-config-path>
 ./setup.sh ~/code/mfb
 ./setup.sh ~/code/mfb benefits-api benefits-calculator
 ./setup.sh ~/work/mfb my-backend my-frontend
+
+# Force-refresh hooks.json after template updates:
+./setup.sh --update-hooks ~/code/mfb
 ```
 
 **What the script does:**
@@ -168,13 +171,16 @@ When the team adds new commands or updates configurations:
 cd <team-config-path>
 git pull origin main
 
-# If new commands were added, re-run setup (safe, idempotent)
+# If hooks.json.template was updated, force-refresh hooks:
+./setup.sh --update-hooks <mfb-workspace>
+
+# Or re-run full setup (safe, idempotent)
 ./setup.sh <mfb-workspace>
 ```
 
-Changes automatically apply via symlinks. Re-running setup ensures:
+Changes to CLAUDE.md and commands automatically apply via symlinks. Re-running setup ensures:
 - New git hooks are installed
-- Hooks.json includes new patterns
+- Hooks.json includes new patterns (use `--update-hooks` to force-refresh)
 - All symlinks are correct
 
 ## Contributing
