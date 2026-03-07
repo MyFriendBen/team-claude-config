@@ -20,7 +20,7 @@ Shared instructions for Claude Code when working with MyFriendBen projects. This
 
 ### `commands/`
 Custom Claude Code commands for MyFriendBen projects:
-- `/add-program` - Implements new benefit programs from Linear tickets
+- `/add-program` - Implements new benefit programs from Linear tickets (Stale Updates coming soon)
 - `/coderabbit-comment-review` - Systematically respond to CodeRabbit PR feedback
 - `/linear-code-review` - Review all PRs in Linear's Code Review column with comprehensive analysis
 - `/playwright-qa-execution` - Automated QA testing from Linear tickets using Playwright MCP, supports staging/production/local environments
