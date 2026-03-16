@@ -1,11 +1,7 @@
 ---
 name: check-program-links
 description: Audit program learn_more_link URLs, find replacements for broken links, and generate SQL updates with human validation checkpoints.
-usage: /check-program-links
-example: /check-program-links
 ---
-
-<command-name>check-program-links</command-name>
 
 # Check Program Links - Link Audit Workflow
 
@@ -27,10 +23,10 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
    ```
 
 2. **Present SQL query for user execution**
-   - Read the query from `team-claude-config/commands/check-program-links/templates/export_programs.sql`
+   - Read the query from `${CLAUDE_SKILL_DIR}/templates/export_programs.sql`
    - Provide the user with the command to execute:
      ```bash
-     psql "$DATABASE_URL" -f team-claude-config/commands/check-program-links/templates/export_programs.sql --csv -o programs_export.csv
+     psql "$DATABASE_URL" -f ${CLAUDE_SKILL_DIR}/templates/export_programs.sql --csv -o programs_export.csv
      ```
    - Wait for user to run the command and confirm CSV is generated
    - Filter for `language_code = 'en-us'`
@@ -55,7 +51,7 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
 ### Phase 2: Check Link Status (Automated)
 
 1. **Check HTTP status of each link**
-   - Use the existing `check_link_status.py` script OR
+   - Use the existing `${CLAUDE_SKILL_DIR}/templates/check_link_status.py` script OR
    - Implement inline using requests library
    - For each URL:
      - **Skip if URL is empty or blank** - leave link_status empty
@@ -123,7 +119,7 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
    - Extract program info: name_abbreviated, program_name, white_label_code
 
 2. **For each broken link:**
-   - Announce: "🔍 Searching for: {program_name} ({white_label_code})..."
+   - Announce: "Searching for: {program_name} ({white_label_code})..."
 
    - Use WebSearch to find official replacement:
      - Search query: "{program_name} {white_label} official site 2026"
@@ -136,7 +132,7 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
      - Check HTTP status of new URL
      - Should return 200
 
-   - Show result: "✓ Found: {new_url}" or "✗ No replacement found"
+   - Show result: "Found: {new_url}" or "No replacement found"
 
 3. **Update CSV**
    - Add `replacement_link` column
@@ -149,7 +145,7 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
      Program         Old URL (Status)    New URL
      co_snap         peak...com (404)    cdhs.colorado.gov/snap
      ```
-   - Say: "📝 Please review programs_export_with_status.csv"
+   - Say: "Please review programs_export_with_status.csv"
    - Say: "Verify the replacement_link column has appropriate URLs"
    - Ask: "Are these replacements acceptable? (y/n)"
    - If no, offer to:
@@ -163,7 +159,7 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
    - Filter rows where `replacement_link` is not empty
 
 2. **For each replacement:**
-   - Generate UPDATE statement:
+   - Generate UPDATE statement (see `${CLAUDE_SKILL_DIR}/templates/example_update_links.sql` for reference):
      ```sql
      UPDATE translations_translation_translation
      SET text = '{new_url}'
@@ -228,14 +224,14 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
      ROLLBACK;
      EOF
      ```
-   - Say: "⚠️ Please review update_links.sql before executing"
+   - Say: "Please review update_links.sql before executing"
    - Say: "When ready, run the SQL manually using one of the options above"
 
 ### Phase 5: Summary
 
 Present final summary:
 ```
-✓ Link Audit Complete!
+Link Audit Complete!
 
 Files generated:
   - programs_export.csv (original export)
@@ -290,10 +286,10 @@ Next steps:
 - If web search fails: Mark as "No replacement found"
 - If SQL generation fails: Show error and stop
 
-## Files Used
+## Supporting Files
 
-### Templates (in team-claude-config)
-Read from `commands/check-program-links/templates/`:
+### Templates (in this skill directory)
+Read from `${CLAUDE_SKILL_DIR}/templates/`:
 - `export_programs.sql` - SQL query for exporting programs
 - `check_link_status.py` - Python script to check HTTP status
 - `example_update_links.sql` - Example SQL UPDATE statements with real data
@@ -311,16 +307,16 @@ User: /check-program-links
 You: Starting link audit workflow...
 
 Phase 1: Exporting programs from database...
-✓ Exported 179 programs to programs_export.csv
+Exported 179 programs to programs_export.csv
 
 Phase 2: Checking HTTP status of all links...
-✓ Checked 179 links in 2m 15s
+Checked 179 links in 2m 15s
 
 Link Status Summary:
-  ✓ 200 (Working):     112 links
-  ✗ 404 (Not Found):    20 links
-  ✗ 403 (Forbidden):     4 links
-  ⊘ EMPTY:              43 links
+  200 (Working):     112 links
+  404 (Not Found):    20 links
+  403 (Forbidden):     4 links
+  EMPTY:              43 links
 
 CHECKPOINT: Continue to find replacements? (y/n)
 
@@ -328,15 +324,15 @@ User: y
 
 Phase 3: Finding replacement URLs for 24 broken links...
 
-🔍 Searching for: Colorado SNAP (co)...
-✓ Found: https://cdhs.colorado.gov/snap (200 OK)
+Searching for: Colorado SNAP (co)...
+Found: https://cdhs.colorado.gov/snap (200 OK)
 
-🔍 Searching for: Colorado TANF (co)...
-✓ Found: https://cdhs.colorado.gov/colorado-works-tanf (200 OK)
+Searching for: Colorado TANF (co)...
+Found: https://cdhs.colorado.gov/colorado-works-tanf (200 OK)
 
 [...continues for each broken link...]
 
-✓ Found working replacements for 23 of 24 broken links
+Found working replacements for 23 of 24 broken links
 
 CHECKPOINT: Please review programs_export_with_status.csv
 The replacement_link column contains the new URLs.
@@ -346,7 +342,7 @@ Are these replacements acceptable? (y/n)
 User: y
 
 Phase 4: Generating SQL UPDATE statements...
-✓ Generated update_links.sql with 23 UPDATE statements
+Generated update_links.sql with 23 UPDATE statements
 
 CHECKPOINT: Please review update_links.sql before executing.
 
@@ -357,11 +353,11 @@ To execute:
   # Or on production:
   psql "$DATABASE_URL" -f update_links.sql
 
-⚠️ Always review SQL before running on production!
+Please review SQL before running on production!
 
 ---
 
-✓ Link Audit Complete!
+Link Audit Complete!
 
 Next steps:
   1. Review update_links.sql

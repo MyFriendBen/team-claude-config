@@ -1,12 +1,8 @@
 ---
 name: linear-code-review
 description: Pull all tickets in Code Review column from Linear (or a specific ticket), review associated PRs, and generate comprehensive reviews with diagrams and staff-level insights.
-usage: /linear-code-review [ticket-number]
-example: /linear-code-review
-example2: /linear-code-review MFB-123
+context: fork
 ---
-
-<command-name>linear-code-review</command-name>
 
 # Linear Code Review - Comprehensive PR Analysis Workflow
 
@@ -31,7 +27,7 @@ Automatically discovers all Linear tickets in the "Code Review" state (or analyz
 ### Phase 1: Discovery (Automated)
 
 **Linear Workspace Configuration:**
-- This command queries the "MFB - Web" **team** (not project) in Linear
+- This skill queries the "MFB - Web" **team** (not project) in Linear
 - It looks for issues with state "Code Review" (or a specific ticket if provided)
 - No manual discovery needed - these values are hardcoded for the MyFriendBen workspace
 
@@ -39,13 +35,13 @@ Automatically discovers all Linear tickets in the "Code Review" state (or analyz
 
    **If no ticket number provided (review all):**
    ```
-   🔍 Starting Code Review PR Discovery...
+   Starting Code Review PR Discovery...
    Searching Linear for tickets in "Code Review" state in "MFB - Web" team...
    ```
 
    **If ticket number provided (review one):**
    ```
-   🔍 Starting Code Review for MFB-123...
+   Starting Code Review for MFB-123...
    Fetching ticket details from Linear...
    ```
 
@@ -244,7 +240,7 @@ For each PR found:
 
 ---
 
-## 🎓 Junior Developer Explanation
+## Junior Developer Explanation
 
 {2-3 paragraph explanation of what this PR does, written for someone new to the codebase}
 
@@ -262,7 +258,7 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 ---
 
-## 📊 Visual Architecture
+## Visual Architecture
 
 {Mermaid diagrams showing:
 - Component hierarchy (for frontend)
@@ -274,19 +270,19 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 ### Component/Module Diagram
 
-```mermaid
+` ``mermaid
 {Appropriate diagram type: flowchart, sequenceDiagram, classDiagram, etc.}
-```
+` ``
 
 ### Data Flow
 
-```mermaid
+` ``mermaid
 {Show how data moves through the system}
-```
+` ``
 
 ---
 
-## 🔍 Staff Engineer Review
+## Staff Engineer Review
 
 ### Architecture & Design
 
@@ -325,9 +321,9 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 ---
 
-## 🔒 Security Analysis
+## Security Analysis
 
-{For each security concern category, either ✅ PASS or ⚠️ CONCERN with details}
+{For each security concern category, either PASS or CONCERN with details}
 
 - **Input Validation**: {Assessment}
 - **SQL Injection**: {Assessment}
@@ -343,7 +339,7 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 ---
 
-## 💥 Impact Analysis
+## Impact Analysis
 
 ### What Changed
 
@@ -372,7 +368,7 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 ---
 
-## ✅ Checklist
+## Checklist
 
 - [ ] Code follows project conventions (Django/React patterns)
 - [ ] Tests are comprehensive and passing
@@ -386,7 +382,7 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 ---
 
-## 📝 Summary
+## Summary
 
 **Recommendation**: {APPROVE / REQUEST CHANGES / NEEDS DISCUSSION}
 
@@ -412,7 +408,7 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 6. **Progress update**
    ```
-   ✓ Generated review for MFB-123 (PR #456)
+   Generated review for MFB-123 (PR #456)
      Saved to: pull-request-reviews/MFB-123.md
 
    Continuing with next PR...
@@ -424,15 +420,15 @@ After all PRs reviewed:
 
 1. **Generate summary report**
    ```
-   ✅ Code Review Complete!
+   Code Review Complete!
 
    Reviewed 5 tickets (7 PRs) in Code Review:
 
-   ✓ MFB-123: pull-request-reviews/MFB-123.md (2 PRs)
-   ✓ MFB-124: pull-request-reviews/MFB-124.md (1 PR)
-   ✓ MFB-125: pull-request-reviews/MFB-125.md (1 PR)
-   ✓ MFB-126: pull-request-reviews/MFB-126.md (2 PRs)
-   ✓ MFB-127: pull-request-reviews/MFB-127.md (1 PR)
+   MFB-123: pull-request-reviews/MFB-123.md (2 PRs)
+   MFB-124: pull-request-reviews/MFB-124.md (1 PR)
+   MFB-125: pull-request-reviews/MFB-125.md (1 PR)
+   MFB-126: pull-request-reviews/MFB-126.md (2 PRs)
+   MFB-127: pull-request-reviews/MFB-127.md (1 PR)
 
    Security Alerts: 2 PRs flagged for security review
    - MFB-123: Input validation concerns
@@ -462,7 +458,7 @@ After all PRs reviewed:
 ### If No Tickets in Code Review
 
 ```
-ℹ️ No tickets found in "Code Review" state
+No tickets found in "Code Review" state
 
 Checked:
 - Team: MFB - Web
@@ -480,7 +476,7 @@ Check Linear workspace to verify.
 ### If Specific Ticket Not Found
 
 ```
-❌ Error: Ticket MFB-999 not found
+Error: Ticket MFB-999 not found
 
 Checked Linear workspace for ticket "MFB-999" but it doesn't exist.
 
@@ -495,7 +491,7 @@ Verify the ticket ID and try again.
 ### If Ticket Has No PRs
 
 ```
-⚠️ Warning: MFB-123 has no linked PRs
+Warning: MFB-123 has no linked PRs
 
 Ticket: "Add SNAP eligibility calculator"
 State: Code Review
@@ -513,7 +509,7 @@ Which option? (A/B/C)
 ### If PR Cannot Be Fetched
 
 ```
-❌ Error: Could not fetch PR #456
+Error: Could not fetch PR #456
 
 Possible issues:
 - PR number incorrect
@@ -529,7 +525,7 @@ Skip this PR and continue? (y/n)
 ### If Review Generation Fails
 
 ```
-❌ Error: Failed to generate review for MFB-123
+Error: Failed to generate review for MFB-123
 
 Error: {error details}
 
@@ -543,7 +539,7 @@ Continue with remaining PRs? (y/n)
 
 ### Review Quality
 
-✅ **Always include:**
+**Always include:**
 - Junior-friendly explanation with analogies
 - At least 2 Mermaid diagrams showing architecture/flow
 - Staff-level technical insights
@@ -551,7 +547,7 @@ Continue with remaining PRs? (y/n)
 - Impact analysis with dependency checking
 - Concrete recommendations with examples
 
-✅ **Diagrams should:**
+**Diagrams should:**
 - Use appropriate Mermaid diagram types
 - Show component relationships (frontend)
 - Show data flow and API calls
@@ -559,7 +555,7 @@ Continue with remaining PRs? (y/n)
 - Be clear and not overly complex
 - Include labels and descriptions
 
-✅ **Security checks must cover:**
+**Security checks must cover:**
 - All OWASP Top 10 categories relevant to the change
 - Input validation thoroughly
 - Authentication/authorization boundaries
@@ -568,14 +564,14 @@ Continue with remaining PRs? (y/n)
 
 ### Writing Style
 
-✅ **For junior developers:**
+**For junior developers:**
 - Avoid jargon or explain it when used
 - Use real-world analogies
 - Explain "why" not just "what"
 - Include code examples in recommendations
 - Be encouraging about good patterns found
 
-✅ **For staff engineer section:**
+**For staff engineer section:**
 - Be precise and technical
 - Reference design patterns by name
 - Point to specific line numbers and files
@@ -584,7 +580,7 @@ Continue with remaining PRs? (y/n)
 
 ### Impact Analysis
 
-✅ **Always check:**
+**Always check:**
 - Search codebase for all references to changed functions/components
 - Check for database migration dependencies
 - Identify API contract changes
@@ -594,7 +590,7 @@ Continue with remaining PRs? (y/n)
 
 ### Efficiency
 
-✅ **Optimize the workflow:**
+**Optimize the workflow:**
 - Run PR fetches in parallel when possible
 - Use Glob/Grep for dependency searches
 - Read files in batch when reviewing related changes
@@ -696,16 +692,16 @@ pull-request-reviews/
 
 ## Success Criteria
 
-- ✅ All Code Review tickets discovered
-- ✅ All PRs found and analyzed
-- ✅ Reviews are junior-dev friendly with analogies
-- ✅ At least 2 diagrams per review
-- ✅ Security analysis complete for every PR
-- ✅ Impact analysis identifies dependencies
-- ✅ Staff-level insights for architecture/design
-- ✅ All reviews saved to pull-request-reviews/ directory
-- ✅ Summary report generated
-- ✅ No PRs skipped without user approval
+- All Code Review tickets discovered
+- All PRs found and analyzed
+- Reviews are junior-dev friendly with analogies
+- At least 2 diagrams per review
+- Security analysis complete for every PR
+- Impact analysis identifies dependencies
+- Staff-level insights for architecture/design
+- All reviews saved to pull-request-reviews/ directory
+- Summary report generated
+- No PRs skipped without user approval
 
 ## Notes
 
