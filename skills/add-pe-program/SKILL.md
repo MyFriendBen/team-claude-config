@@ -17,8 +17,8 @@ Implements a new PolicyEngine-based benefit program in the `benefits-api` reposi
 2. Extract:
    - **Branch name** — from the `branchName` field on the issue object
    - **PolicyEngine variable name** — from the ticket description
-   - **Initial config JSON** and **test cases JSON** — from ticket attachments
-     - If the MCP response includes attachment URLs, fetch them
+   - **Spec markdown**, **initial config JSON**, and **test cases JSON** — from ticket attachments
+     - If the MCP response includes attachment URLs, fetch them. All three files must be written exactly as-is from the attachment — do not summarize, paraphrase, or reformat any of them.
      - If attachments can't be fetched automatically, ask the user to paste the file contents
 3. If any piece is still missing after attempting to extract it, prompt the user before continuing
 4. In `benefits-api/`, create or switch to the branch:
@@ -34,7 +34,7 @@ Derive the **state** and **program name** (snake_case) from the ticket title or 
 
 Write the following three files:
 
-**Spec** — summarize eligibility criteria, benefit value, and sources from the ticket:
+**Spec** — write the markdown from the ticket attachment exactly as-is:
 ```
 benefits-api/programs/programs/{state}/{program}/spec.md
 ```
