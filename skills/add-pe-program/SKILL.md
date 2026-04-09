@@ -138,7 +138,17 @@ Verify and fix:
    ```
 3. Include a link to the Linear ticket in the PR body
 
-## Phase 6: Summary and Next Steps
+## Phase 6: Comment QA Scenarios on Linear Ticket
+
+1. Read `benefits-api/programs/programs/{state}/{program}/spec.md`
+2. Extract the **Test Scenarios** section verbatim — everything from the `## Test Scenarios` heading to the end of the file (or the next top-level `##` heading, whichever comes first)
+3. Post it as a comment on the Linear ticket:
+   ```
+   mcp__linear-server__save_comment(issue_id="{ticket-id}", body="{test scenarios section}")
+   ```
+   The comment body must be the extracted markdown exactly as written — no reformatting, no summarizing.
+
+## Phase 7: Summary and Next Steps
 
 Summarize the changes you made (files created, test results, PR link).
 
