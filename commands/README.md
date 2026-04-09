@@ -9,7 +9,7 @@ Implements a new PolicyEngine-based benefit program from a Linear ticket into be
 
 **Usage:** `/add-pe-program <ticket-id>`
 **Example:** `/add-pe-program MFB-1234`
-**Details:** See [add-pe-program.md](add-pe-program.md)
+**Details:** See [skills/add-pe-program/](../skills/add-pe-program/)
 
 ### `/coderabbit-comment-review`
 Systematically review and respond to CodeRabbit feedback on pull requests.
