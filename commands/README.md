@@ -18,34 +18,13 @@ Systematically review and respond to CodeRabbit feedback on pull requests.
 **Example:** `/coderabbit-comment-review 123`
 **Details:** See [coderabbit-comment-review.md](coderabbit-comment-review.md)
 
-### `/linear-code-review`
-Pull all tickets in Code Review column from Linear (or a specific ticket), review associated PRs, and generate comprehensive reviews with diagrams and staff-level insights.
+## Skills (moved from commands)
 
-**Usage:** `/linear-code-review [ticket-number]`
-**Examples:**
-- `/linear-code-review` - Review all tickets in Code Review
-- `/linear-code-review MFB-123` - Review only MFB-123
-**Details:** See [linear-code-review.md](linear-code-review.md)
+The following workflows have been promoted to **skills** (in the `skills/` directory) for enhanced capabilities like supporting files, context isolation, and tool restrictions:
 
-**Future Enhancements:**
-- Post review summaries as PR comments (optional)
-- Track review history over time
-- Generate team learning docs from common patterns
-- Integration with CodeRabbit for automated follow-up
-- Metrics dashboard (common issues, review time, etc.)
-
-### `/playwright-qa-execution`
-Execute automated QA test scenarios from Linear ticket using Playwright MCP for benefits screener testing. Supports staging, production, and local environments.
-
-**Usage:** `/playwright-qa-execution <linear-ticket-id> [environment] [output-directory]`
-**Examples:**
-- `/playwright-qa-execution MFB-1234` - Staging (default), results to `qa/`
-- `/playwright-qa-execution MFB-1234 production` - Production with confirmation
-- `/playwright-qa-execution MFB-1234 local` - Local dev environment
-- `/playwright-qa-execution MFB-1234 staging qa-jan-2026` - Custom output directory
-**Details:** See [playwright-qa-execution.md](playwright-qa-execution.md)
-
-**Note:** This command requires Playwright MCP and Linear MCP enabled, and is typically used as Step 6 in the AI_PROGRAM_QA_PROCESS workflow. Production environment requires explicit confirmation.
+- **`/check-program-links`** - Audit program URLs and generate SQL updates. See [skills/check-program-links/](../skills/check-program-links/)
+- **`/linear-code-review`** - Comprehensive PR analysis with diagrams. Runs in forked context. See [skills/linear-code-review/](../skills/linear-code-review/)
+- **`/playwright-qa-execution`** - Automated QA testing via Playwright MCP. See [skills/playwright-qa-execution/](../skills/playwright-qa-execution/)
 
 ## How Project Commands Work
 
@@ -113,6 +92,8 @@ Consider creating commands for MyFriendBen-specific workflows:
 - **PR workflows**: Create PRs with standard templates
 - **Deployment checks**: Pre-deployment validation
 - **Data fixtures**: Generate test data for programs
+
+For complex workflows that need supporting files, context isolation, or tool restrictions, consider creating a **skill** in `skills/` instead.
 
 ## Best Practices
 

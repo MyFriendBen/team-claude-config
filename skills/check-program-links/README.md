@@ -1,11 +1,12 @@
 # Check Program Links - Templates and Dependencies
 
-This directory contains templates and dependencies for the `/check-program-links` command.
+This directory contains templates and dependencies for the `/check-program-links` skill.
 
 ## Structure
 
 ```
-check-program-links/
+skills/check-program-links/
+├── SKILL.md                            # Skill definition
 ├── README.md                           # This file
 ├── templates/                          # Reusable templates
 │   ├── export_programs.sql            # SQL query to export programs
@@ -89,6 +90,6 @@ These templates are checked into git, so improvements benefit the whole team.
 
 ## Related Files
 
-- Main skill definition: `../check-program-links.md`
+- Skill definition: `SKILL.md`
 - Working directory: Project root (e.g., `/Users/you/code/mfb/`)
 - Output location: Project root

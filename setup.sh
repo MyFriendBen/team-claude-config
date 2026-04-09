@@ -41,7 +41,7 @@ usage() {
     echo "  $0 --update-hooks ~/code/mfb"
     echo ""
     echo "What this script does:"
-    echo "  - Creates symlinks for CLAUDE.md and commands/"
+    echo "  - Creates symlinks for CLAUDE.md, commands/, agents/, and skills/"
     echo "  - Sets up hooks.json with correct paths"
     echo "  - Installs git hooks for proper commit attribution"
     echo "  - Safe to run multiple times (idempotent)"
@@ -244,8 +244,24 @@ main() {
         "Commands directory symlink"
     echo ""
 
-    # Step 4: Set up hooks.json
-    print_info "Step 4: Setting up hooks.json..."
+    # Step 4: Symlink agents directory
+    print_info "Step 4: Setting up agents..."
+    create_symlink \
+        "$SCRIPT_DIR/agents" \
+        "$MFB_WORKSPACE/.claude/agents" \
+        "Agents directory symlink"
+    echo ""
+
+    # Step 5: Symlink skills directory
+    print_info "Step 5: Setting up skills..."
+    create_symlink \
+        "$SCRIPT_DIR/skills" \
+        "$MFB_WORKSPACE/.claude/skills" \
+        "Skills directory symlink"
+    echo ""
+
+    # Step 6: Set up hooks.json
+    print_info "Step 6: Setting up hooks.json..."
     HOOKS_FILE="$MFB_WORKSPACE/.claude/hooks.json"
 
     if [ -f "$HOOKS_FILE" ]; then
@@ -254,9 +270,6 @@ main() {
             print_warning "hooks.json exists but has placeholders, updating..."
         else
             print_success "hooks.json already exists and is customized"
-            echo ""
-            print_info "Step 5: Setting up git hooks..."
-            # Skip to git hooks
         fi
     fi
 
@@ -281,27 +294,23 @@ main() {
     fi
     echo ""
 
-    # Step 5: Set up git hooks
-    print_info "Step 5: Setting up git hooks..."
+    # Step 7: Set up git hooks in all git repos found in workspace
+    print_info "Step 7: Setting up git hooks..."
 
-    # Backend repo
-    if [ -d "$MFB_WORKSPACE/$BACKEND_REPO/.git" ]; then
-        BACKEND_HOOK="$MFB_WORKSPACE/$BACKEND_REPO/.git/hooks/prepare-commit-msg"
-        cp "$SCRIPT_DIR/git-hooks/prepare-commit-msg" "$BACKEND_HOOK"
-        chmod +x "$BACKEND_HOOK"
-        print_success "Git hook installed in $BACKEND_REPO"
-    else
-        print_warning "$BACKEND_REPO not found or not a git repo, skipping git hook"
-    fi
+    hook_count=0
+    for git_dir in "$MFB_WORKSPACE"/*/.git; do
+        [ -d "$git_dir" ] || continue
+        repo_dir="$(dirname "$git_dir")"
+        repo_name="$(basename "$repo_dir")"
+        hook_path="$git_dir/hooks/prepare-commit-msg"
+        cp "$SCRIPT_DIR/git-hooks/prepare-commit-msg" "$hook_path"
+        chmod +x "$hook_path"
+        print_success "Git hook installed in $repo_name"
+        hook_count=$((hook_count + 1))
+    done
 
-    # Frontend repo
-    if [ -d "$MFB_WORKSPACE/$FRONTEND_REPO/.git" ]; then
-        FRONTEND_HOOK="$MFB_WORKSPACE/$FRONTEND_REPO/.git/hooks/prepare-commit-msg"
-        cp "$SCRIPT_DIR/git-hooks/prepare-commit-msg" "$FRONTEND_HOOK"
-        chmod +x "$FRONTEND_HOOK"
-        print_success "Git hook installed in $FRONTEND_REPO"
-    else
-        print_warning "$FRONTEND_REPO not found or not a git repo, skipping git hook"
+    if [ $hook_count -eq 0 ]; then
+        print_warning "No git repos found in workspace, skipping git hooks"
     fi
     echo ""
 
@@ -327,6 +336,22 @@ main() {
         errors=$((errors + 1))
     fi
 
+    # Check agents
+    if [ -L "$MFB_WORKSPACE/.claude/agents" ]; then
+        print_success "Agents: $(readlink "$MFB_WORKSPACE/.claude/agents")"
+    else
+        print_error "Agents symlink not found"
+        errors=$((errors + 1))
+    fi
+
+    # Check skills
+    if [ -L "$MFB_WORKSPACE/.claude/skills" ]; then
+        print_success "Skills: $(readlink "$MFB_WORKSPACE/.claude/skills")"
+    else
+        print_error "Skills symlink not found"
+        errors=$((errors + 1))
+    fi
+
     # Check hooks.json
     if [ -f "$MFB_WORKSPACE/.claude/hooks.json" ]; then
         if grep -q "<mfb-workspace>" "$MFB_WORKSPACE/.claude/hooks.json"; then
@@ -341,16 +366,16 @@ main() {
     fi
 
     # Check git hooks
-    hook_count=0
-    if [ -x "$MFB_WORKSPACE/$BACKEND_REPO/.git/hooks/prepare-commit-msg" ]; then
-        hook_count=$((hook_count + 1))
-    fi
-    if [ -x "$MFB_WORKSPACE/$FRONTEND_REPO/.git/hooks/prepare-commit-msg" ]; then
-        hook_count=$((hook_count + 1))
-    fi
+    verify_hook_count=0
+    for git_dir in "$MFB_WORKSPACE"/*/.git; do
+        [ -d "$git_dir" ] || continue
+        if [ -x "$git_dir/hooks/prepare-commit-msg" ]; then
+            verify_hook_count=$((verify_hook_count + 1))
+        fi
+    done
 
-    if [ $hook_count -gt 0 ]; then
-        print_success "Git hooks installed in $hook_count repo(s)"
+    if [ $verify_hook_count -gt 0 ]; then
+        print_success "Git hooks installed in $verify_hook_count repo(s)"
     else
         print_warning "No git hooks installed (repos may not exist yet)"
     fi

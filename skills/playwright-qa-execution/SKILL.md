@@ -1,11 +1,8 @@
 ---
 name: playwright-qa-execution
 description: Execute automated QA test scenarios from Linear ticket using Playwright MCP for benefits screener testing. Use in a separate session with Playwright MCP enabled.
-usage: /playwright-qa-execution <linear-ticket-id> [environment] [output-directory]
-example: /playwright-qa-execution MFB-1234 staging qa
+disable-model-invocation: true
 ---
-
-<command-name>playwright-qa-execution</command-name>
 
 # Playwright MCP QA Testing Skill
 
@@ -17,7 +14,7 @@ Automates browser testing of benefits screener using Playwright MCP. Fetches tes
 
 ## Overview
 
-This command:
+This skill:
 1. Fetches a Linear ticket containing QA test scenarios
 2. Extracts test scenarios and program details from ticket
 3. Executes each scenario against specified environment (staging/production/local)
@@ -108,7 +105,7 @@ Use case: Standard QA testing, safe for experimentation
 ```
 Base URL: https://screener.myfriendben.org/{state}
 Use case: Final verification before release, smoke testing
-⚠️  WARNING: Use with caution, affects live users
+WARNING: Use with caution, affects live users
 ```
 
 **Local:**
@@ -120,7 +117,7 @@ Requires: Local dev server running
 
 **IMPORTANT:** If environment is `production`, display a warning and ask for confirmation before proceeding:
 ```
-⚠️  WARNING: Running tests against PRODUCTION environment
+WARNING: Running tests against PRODUCTION environment
 
 This will create real data in the production system.
 Are you sure you want to proceed? (yes/no)
@@ -160,7 +157,7 @@ Only proceed if user explicitly confirms with "yes".
 
    **If environment is `production`, show warning:**
    ```
-   ⚠️  WARNING: Running tests against PRODUCTION environment
+   WARNING: Running tests against PRODUCTION environment
 
    This will create real data in the production system.
    Are you sure you want to proceed? (yes/no)
@@ -686,84 +683,16 @@ After all scenarios executed:
 
 ## Integration with QA Process
 
-This command is typically invoked as **Step 6** in the AI_PROGRAM_QA_PROCESS:
+This skill is typically invoked as **Step 6** in the AI_PROGRAM_QA_PROCESS:
 
 1. Program research and implementation
 2. Test scenario generation in Linear ticket
 3. Manual review of scenarios
-4. **→ Automated execution (THIS COMMAND)**
+4. **Automated execution (THIS SKILL)**
 5. Review results in local `qa/` directory
 6. Bug filing for failures
-7. Re-testing after fixes (re-run this command)
+7. Re-testing after fixes (re-run this skill)
 8. Final QA approval
-
----
-
-## Example Full Execution
-
-**Example 1: Staging (default):**
-```bash
-# Start new session with Playwright MCP + Linear MCP enabled
-/playwright-qa-execution MFB-1234
-
-# Uses: staging environment, qa/ directory
-# URL: https://benefits-calculator-staging.herokuapp.com/co
-# Results: qa/MFB-1234-csfp-results.md
-```
-
-**Example 2: Production with confirmation:**
-```bash
-/playwright-qa-execution MFB-1234 production
-
-# ⚠️  WARNING: Running tests against PRODUCTION environment
-# This will create real data in the production system.
-# Are you sure you want to proceed? (yes/no)
-# > yes
-
-# Uses: production environment, qa/ directory
-# URL: https://screener.myfriendben.org/co
-# Results: qa/MFB-1234-csfp-results.md
-```
-
-**Example 3: Local development:**
-```bash
-/playwright-qa-execution MFB-1234 local
-
-# Uses: local environment, qa/ directory
-# URL: http://localhost:3000/co
-# Results: qa/MFB-1234-csfp-results.md
-# Note: Requires local dev server running on port 3000
-```
-
-**Example 4: Custom output directory:**
-```bash
-/playwright-qa-execution MFB-1234 staging qa-jan-2026
-
-# Uses: staging environment, custom directory
-# URL: https://benefits-calculator-staging.herokuapp.com/co
-# Results: qa-jan-2026/MFB-1234-csfp-results.md
-```
-
-**Full workflow:**
-```
-# Command execution:
-# 1. Parse arguments (ticket, environment, output dir)
-# 2. Determine base URL from environment
-# 3. Show production warning if applicable
-# 4. Fetch Linear ticket MFB-1234
-# 5. Parse test scenarios from ticket description
-# 6. Extract program details and state code
-# 7. Create output directory if needed
-# 8. Initialize results file with environment info
-# 9. Create todo list (e.g., 14 scenarios)
-# 10. For each scenario:
-#     - Navigate to screener (baseURL + state)
-#     - Complete 12-step form with scenario data
-#     - Verify expected vs actual results
-#     - Document findings in results file
-# 11. Generate summary report
-# 12. Provide recommendations
-```
 
 ---
 
@@ -798,7 +727,7 @@ If scenarios incomplete:
 
 ## Notes
 
-- This command REQUIRES Playwright MCP enabled in the session
+- This skill REQUIRES Playwright MCP enabled in the session
 - Use SEPARATE session from main development work
 - Staging environment recommended (avoid production testing)
 - Results are saved for traceability and bug reporting
