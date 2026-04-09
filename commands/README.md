@@ -4,12 +4,12 @@ This directory contains custom Claude Code commands for MyFriendBen projects. Th
 
 ## Available Commands
 
-### `/add-program`
-Implements a new benefit program from Linear ticket created by program-researcher.
+### `/add-pe-program`
+Implements a new PolicyEngine-based benefit program from a Linear ticket into benefits-api — research files, program class, dependency tests, validation, and PR.
 
-**Usage:** `/add-program <ticket-id>`
-**Example:** `/add-program LIN-1234`
-**Details:** See [add-program.md](add-program.md)
+**Usage:** `/add-pe-program <ticket-id>`
+**Example:** `/add-pe-program MFB-1234`
+**Details:** See [add-pe-program.md](add-pe-program.md)
 
 ### `/coderabbit-comment-review`
 Systematically review and respond to CodeRabbit feedback on pull requests.
@@ -85,7 +85,8 @@ When you create a useful command for MyFriendBen projects:
 ## Command Ideas
 
 Consider creating commands for MyFriendBen-specific workflows:
-- **Program implementation**: Add new benefit programs (already have `/add-program`)
+- **Program implementation**: Add new benefit programs (already have `/add-pe-program`)
+- **QA automation**: Automated testing of benefit programs (already have `/playwright-qa-execution`)
 - **Migration helpers**: Create Django migrations with standard patterns
 - **Translation updates**: Add/update translations for new features
 - **PR workflows**: Create PRs with standard templates
@@ -109,4 +110,4 @@ For complex workflows that need supporting files, context isolation, or tool res
 - **Project-level** (this directory): Commands specific to MyFriendBen, symlinked to `<mfb-workspace>/.claude/commands/`
 - **Global**: Commands for any project, stored in `~/.claude/skills/`
 
-Since `/add-program` is specific to MyFriendBen's Django architecture, it belongs here as a project-level command.
+Since `/add-pe-program` is specific to MyFriendBen's Django architecture, it belongs here as a project-level command.
