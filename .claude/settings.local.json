@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(gh *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__get_issue",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__list_issues",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__list_teams",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__get_team",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__list_issue_statuses",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__get_issue_status",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__list_comments",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__get_document",
+      "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__list_documents"
     ]
   }
 }
