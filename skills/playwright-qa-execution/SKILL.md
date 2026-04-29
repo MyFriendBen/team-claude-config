@@ -1,12 +1,12 @@
 ---
 name: playwright-qa-execution
-description: Execute automated QA test scenarios from Linear ticket using Playwright MCP for benefits screener testing. Use in a separate session with Playwright MCP enabled.
+description: Execute automated QA test scenarios from a spec.md attached to a Linear ticket using Playwright MCP for benefits screener testing. Use in a separate session with Playwright MCP enabled.
 disable-model-invocation: true
 ---
 
 # Playwright MCP QA Testing Skill
 
-Automates browser testing of benefits screener using Playwright MCP. Fetches test scenarios from Linear ticket, systematically executes them against specified environment, and documents results locally.
+Automates browser testing of benefits screener using Playwright MCP. Fetches the `{state}_{program}_spec.md` file attached to a Linear ticket, systematically executes its test scenarios against the specified environment, and documents results locally.
 
 **Related:** This is typically used as Step 6 in the AI_PROGRAM_QA_PROCESS.md workflow.
 
@@ -15,8 +15,8 @@ Automates browser testing of benefits screener using Playwright MCP. Fetches tes
 ## Overview
 
 This skill:
-1. Fetches a Linear ticket containing QA test scenarios
-2. Extracts test scenarios and program details from ticket
+1. Fetches a Linear ticket and downloads its attached `{state}_{program}_spec.md`
+2. Extracts program details and test scenarios from the spec.md attachment
 3. Executes each scenario against specified environment (staging/production/local)
 4. Documents results in local `qa/` directory
 
@@ -28,49 +28,54 @@ This skill:
 - [ ] Playwright MCP server is enabled in THIS session
 - [ ] Linear MCP server is enabled for ticket fetching
 - [ ] You have access to launch a browser (not headless-only environment)
-- [ ] Linear ticket contains test scenarios section (see format below)
+- [ ] Linear ticket has a `{state}_{program}_spec.md` file attached (see format below)
 - [ ] Target environment is accessible
 
 If Playwright MCP or Linear MCP is not available, STOP and notify the user.
 
 ---
 
-## Expected Linear Ticket Format
+## Expected spec.md Format
 
-The Linear ticket must contain a structured description with the following sections:
+The Linear ticket must have a `{state}_{program}_spec.md` file attached (e.g. `tx_head_start_spec.md`). The skill reads two sections out of that file:
 
 ```markdown
 ## Program Details
-- Program: [Program Name]
-- State: [State Code]
-- White Label: [White Label ID]
+
+- **Program**: [Program Name]
+- **State**: [State Code]
+- **White Label**: [White Label ID]
+- **Research Date**: [YYYY-MM-DD]   (informational only)
 
 ## Test Scenarios
 
 ### Scenario 1: [Description]
-**Household:**
-- Member 1: [Head/Spouse/Child], Age [X], Income: $[amount]/[frequency] ([type])
-- Member 2: [Relation], Age [Y], No income, Student
+**What we're checking**: [Short rationale]
+**Expected**: Eligible | Not eligible
 
-**Expected Outcome:** [Program Name] [shown as eligible / NOT shown]
+**Steps**:
+- **Location**: Enter ZIP code `[ZIP]`, Select county `[County]`
+- **Household**: Number of people: `[N]`
+- **Person 1 ([Role])**: Relationship: `[Head of Household/Spouse/Child/Foster Child/...]`, Birth month/year: `[Month YYYY]` (age [X]), Has income: `[Yes/No]`, Income type: `[Wages/Salaries/...]`, Income amount: `$[amount]` per month, Insurance: `[None/...]`, Citizenship: `[U.S. Citizen/...]`
+- **Person 2 ([Role])**: ...
+- **Current Benefits**: Select `[None/SNAP/TANF/SSI/...]`
+
+**Why this matters**: [Why this scenario is included]
+
+---
 
 ### Scenario 2: [Description]
-**Household:**
-- Member 1: [Details]
-
-**Expected Outcome:** [Expected result]
+...
 ```
 
 **Required fields for each scenario:**
-- Scenario number and description
-- Household member details (relation, age, income, conditions)
-- Expected eligibility outcome (shown/not shown, eligible/ineligible)
+- Scenario number and description (`### Scenario N: ...`)
+- `**Expected**:` outcome (Eligible / Not eligible)
+- `**Steps**:` block describing Location, Household size, each Person, and Current Benefits
 
-**Optional fields:**
-- Expenses (rent, childcare, etc.)
-- Assets
-- Existing benefits
-- ZIP code (defaults to first ZIP in state)
+**Other sections in the spec.md** (`## Eligibility Criteria`, `## Benefit Value`, `## Acceptance Criteria`, `## Source Documentation`, `## Research Output`, etc.) may be present and are ignored by this skill.
+
+For a canonical example, see `benefits-api/programs/programs/tx/head_start/spec.md`.
 
 ---
 
@@ -129,9 +134,9 @@ Only proceed if user explicitly confirms with "yes".
 
 ## Workflow
 
-### Phase 1: Fetch Test Scenarios from Linear
+### Phase 1: Fetch Test Scenarios from spec.md
 
-**CRITICAL: Use Linear API to fetch ticket and extract test scenarios.**
+**CRITICAL: Test scenarios live in the `{state}_{program}_spec.md` file attached to the Linear ticket — not in the ticket description or comments. Always read scenarios from the attached spec.**
 
 1. **Parse Arguments**
    - Required: Linear ticket ID (e.g., `MFB-1234`)
@@ -170,67 +175,56 @@ Only proceed if user explicitly confirms with "yes".
      ```
      mcp__Linear__get_issue with ticket ID
      ```
-   - Verify ticket exists and contains test scenarios
+   - Verify ticket exists.
 
-4. **Parse Ticket for Required Information**
+4. **Locate and Fetch the spec.md Attachment**
+   - In the issue's attachments, find the file whose name matches `*_spec.md` (typically `{state}_{program}_spec.md`, e.g. `tx_head_start_spec.md`).
+   - If the MCP response includes the attachment URL, fetch the file's contents.
+   - If the attachment can't be fetched automatically, ask the user to paste the spec.md contents.
+   - If the ticket has no spec.md attachment, **stop** and tell the user the ticket is missing the required `{state}_{program}_spec.md` attachment.
 
-   The ticket description should contain sections like:
-   ```markdown
-   ## Program Details
-   - Program: CSFP
-   - State: CO
-   - White Label: co
+5. **Parse the spec.md**
 
-   ## Test Scenarios
-
-   ### Scenario 1: Eligible - Single Senior
-   **Household:**
-   - Member 1: Head, Age 65, Income: $1,500/month (wages)
-
-   **Expected Outcome:** CSFP shown as eligible
-
-   ### Scenario 2: Ineligible - Too Young
-   **Household:**
-   - Member 1: Head, Age 45, Income: $1,200/month (wages)
-
-   **Expected Outcome:** CSFP NOT shown
-   ```
-
-   Extract:
+   Extract from `## Program Details`:
    - Program name
-   - State code / white label
-   - Each test scenario with:
-     - Scenario number and description
-     - Household member details (age, income, relation, conditions)
-     - Expected eligibility outcome
+   - State code
+   - White label
 
-5. **Present Summary to User**
+   Extract each `### Scenario N: <description>` block under `## Test Scenarios` into a structured object:
+   - Scenario number and description
+   - `**What we're checking**` rationale
+   - `**Expected**` outcome (Eligible / Not eligible)
+   - `**Steps**` block — Location (ZIP, county), Household size, each `Person N` line (Relationship, Birth month/year, Has income, Income type/amount/frequency, Insurance, Citizenship), Current Benefits
+
+   Ignore other sections of the spec (`## Eligibility Criteria`, `## Benefit Value`, `## Acceptance Criteria`, `## Source Documentation`, `## Research Output`, etc.).
+
+6. **Present Summary to User**
    ```
    Linear Ticket: MFB-1234
-   Title: QA Test Scenarios for CSFP - Colorado
+   Title: QA Test Scenarios for Head Start - Texas
 
-   Program: CSFP (Commodity Supplemental Food Program)
-   State: CO
-   White Label: co
+   Program: Head Start
+   State: TX
+   White Label: tx
    Environment: STAGING
-   Test Scenarios Found: 14
+   Test Scenarios Found: 11
 
    Scenarios will be executed against:
-   https://benefits-calculator-staging.herokuapp.com/co
+   https://benefits-calculator-staging.herokuapp.com/tx
 
-   Results will be saved to: qa/MFB-1234-csfp-results.md
+   Results will be saved to: qa/MFB-1234-head_start-results.md
 
    Ready to proceed with execution? (y/n)
    ```
 
    **If user confirms, continue. If not, stop and await further instructions.**
 
-4. **Create Output Directory Structure**
+7. **Create Output Directory Structure**
    ```bash
-   mkdir -p qa
+   mkdir -p {outputDir}
    ```
 
-5. **Initialize Results File**
+8. **Initialize Results File**
    - Create file: `{outputDir}/{TICKET-ID}-{program-name}-results.md`
    - Add header with ticket metadata:
    ```markdown
@@ -248,8 +242,8 @@ Only proceed if user explicitly confirms with "yes".
    |----------|-------------|----------|--------|--------|-----|
    ```
 
-6. **Create Todo List**
-   - Create task for each test scenario extracted from Linear
+9. **Create Todo List**
+   - Create task for each test scenario extracted from the spec.md
    - Track progress through execution
    - Mark scenarios complete as you go
 
