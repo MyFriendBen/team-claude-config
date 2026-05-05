@@ -1,23 +1,20 @@
 ---
 name: linear-code-review
-description: Pull all tickets in Code Review column from Linear (or a specific ticket), review associated PRs, and generate comprehensive reviews with diagrams and staff-level insights.
-context: fork
+description: Review a specific Linear ticket's associated PR(s) and generate a comprehensive review with diagrams and staff-level insights.
 ---
 
 # Linear Code Review - Comprehensive PR Analysis Workflow
 
-Automatically discovers all Linear tickets in the "Code Review" state (or analyzes a specific ticket), reviews their associated Pull Requests, and generates comprehensive, junior-dev-friendly reviews with visual diagrams, analogies, and staff-level technical insights.
+Analyzes a specific Linear ticket, reviews its associated Pull Request(s), and generates a comprehensive review with visual diagrams and staff-level technical insights.
 
-## Usage Modes
+## Usage
 
-1. **Review all tickets**: `/linear-code-review` - Reviews all tickets in "Code Review" state
-2. **Review specific ticket**: `/linear-code-review MFB-123` - Reviews only the specified ticket
+`/linear-code-review MFB-123` - Reviews the specified ticket's PR(s)
 
 ## Core Principles
 
 - **Educational**: Reviews should help junior developers understand the code
 - **Visual**: Use diagrams (Mermaid) to explain architecture and data flow
-- **Analogies**: Explain complex concepts with real-world comparisons
 - **Staff-level rigor**: Apply senior engineering expertise to identify issues
 - **Security-first**: Always check for vulnerabilities and security concerns
 - **Impact analysis**: Identify potential breaking changes and dependencies
@@ -26,99 +23,38 @@ Automatically discovers all Linear tickets in the "Code Review" state (or analyz
 
 ### Phase 1: Discovery (Automated)
 
-**Linear Workspace Configuration:**
-- This skill queries the "MFB - Web" **team** (not project) in Linear
-- It looks for issues with state "Code Review" (or a specific ticket if provided)
-- No manual discovery needed - these values are hardcoded for the MyFriendBen workspace
-
 1. **Announce start of workflow**
-
-   **If no ticket number provided (review all):**
-   ```
-   Starting Code Review PR Discovery...
-   Searching Linear for tickets in "Code Review" state in "MFB - Web" team...
-   ```
-
-   **If ticket number provided (review one):**
    ```
    Starting Code Review for MFB-123...
    Fetching ticket details from Linear...
    ```
 
-2. **Query Linear for tickets**
+2. **Query Linear for ticket**
+   - Call `mcp__Linear__get_issue` with the ticket ID (e.g., "MFB-123")
+   - No state filtering needed — reviews the ticket regardless of state
 
-   **Mode A: Review all tickets in Code Review**
-   - Use Linear MCP to list issues with these exact parameters:
-     - **team**: "MFB - Web" (this is a team name, not a project)
-     - **state**: "Code Review"
-     - **includeArchived**: false
-   - Call: `mcp__Linear__list_issues` with:
-     ```json
-     {
-       "team": "MFB - Web",
-       "state": "Code Review",
-       "includeArchived": false
-     }
-     ```
-   - **Important**: Use the `team` parameter, NOT `project`. "MFB - Web" is a Linear team.
-
-   **Mode B: Review specific ticket**
-   - Use Linear MCP to get single issue:
-     - Call `mcp__Linear__get_issue` with the ticket ID (e.g., "MFB-123")
-     - No state filtering needed - reviews the ticket regardless of state
-   - Skip to step 3 with this single ticket
-
-3. **Extract PR links from each ticket**
-   - For each Linear issue found:
-     - Use `mcp__Linear__get_issue` to get full issue details
-     - Extract GitHub PR URLs from issue description and attachments
-     - Parse PR numbers from URLs (format: `github.com/owner/repo/pull/{number}`)
-   - Handle multiple PRs per ticket
+3. **Extract PR links from the ticket**
+   - Use `mcp__Linear__get_issue` to get full issue details
+   - Extract GitHub PR URLs from issue description and attachments
+   - Parse PR numbers from URLs (format: `github.com/owner/repo/pull/{number}`)
+   - If no PR links found, **ask the user**: "No PR link found for MFB-XXX. Please paste the GitHub PR URL(s) for this ticket."
+   - Do NOT attempt to search git branches or run git commands to discover PRs
 
 4. **Present discovery summary**
-
-   **Mode A: All tickets**
-   ```
-   Found 5 tickets in Code Review:
-
-   1. MFB-123: Add SNAP eligibility calculator
-      PRs: #456, #457
-
-   2. MFB-124: Update white label configuration UI
-      PRs: #458
-
-   3. MFB-125: Fix income validation bug
-      PRs: #459
-
-   ... (continue for all tickets)
-
-   Total: 5 tickets, 7 PRs
-   ```
-
-   **Mode B: Single ticket**
    ```
    Ticket MFB-123: Add SNAP eligibility calculator
    State: Code Review
    PRs found: #456, #457
-
-   Total: 1 ticket, 2 PRs
    ```
 
-5. **CHECKPOINT 1: Confirm before proceeding**
-
-   **Mode A: All tickets**
-   - Ask: "Ready to review all 7 PRs? This will generate comprehensive reviews. (y/n)"
-   - If no, ask if user wants to select specific tickets
-   - If yes, proceed to Phase 2
-
-   **Mode B: Single ticket**
-   - Ask: "Ready to review 2 PRs for MFB-123? (y/n)"
+5. **Confirm before proceeding**
+   - Ask: "Ready to review PR(s) for MFB-123? (y/n)"
    - If yes, proceed to Phase 2
    - If no, exit
 
-### Phase 2: PR Analysis (Automated, per PR)
+### Phase 2: PR Analysis (Automated)
 
-For each PR found:
+For each PR associated with the ticket:
 
 #### Step 2.1: Fetch PR Details
 
@@ -224,7 +160,61 @@ For each PR found:
    - Recommend additional testing
    - Suggest migration strategy if needed
 
-#### Step 2.5: Generate Review Document
+#### Step 2.5: Automated Follow-Up Analyses
+
+Run these checks automatically for every PR. Each is conditional on what the PR actually changes — skip gracefully with a note if not applicable.
+
+**A. Business Logic Correctness** *(if PR adds or modifies a calculator or eligibility rule)*
+
+1. Detect whether the PR touches any file matching `programs/programs/{state}/{program}/` or any calculator/eligibility file
+2. If yes, find the corresponding `spec.md` for the affected program(s)
+3. Read the spec and compare it line-by-line against the calculator implementation in the diff
+4. Document:
+   - Rules implemented correctly
+   - Any discrepancies between spec and code (wrong thresholds, missing conditions, incorrect benefit amounts)
+   - Any spec rules not covered by the implementation
+5. If no calculator changes detected, note: "Not applicable — no eligibility logic modified in this PR."
+
+**B. White-Label / Multi-Tenant Behavior** *(always run)*
+
+1. Identify all functions, classes, API endpoints, or model fields changed in the PR
+2. Search white label config files (e.g., `configuration/`, `whitelabel/`, any `*white_label*` or `*whitelabel*` files) for references to those identifiers
+3. Check for any white-label-specific overrides that interact with the changed code
+4. Document:
+   - Which white labels reference the changed code
+   - Whether any white label could behave differently or break
+   - Any white labels that need config updates alongside this PR
+5. If no white-label-specific impact found, note: "No white label configurations reference the changed code."
+
+**C. Translation Completeness** *(if PR introduces new user-facing strings)*
+
+1. Scan the diff for new hardcoded strings rendered in the UI (React components, Django templates, serializer messages, error text)
+2. Check whether each string has a corresponding translation key (look for `Translation` model usage, i18n patterns, or translation key references)
+3. Check the PR description for a "Deployment" section that lists new translation keys
+4. Document:
+   - All new user-facing strings found
+   - Which ones already have translation keys wired up
+   - Which ones are missing translation keys entirely
+   - Which ones have keys but are not documented in the PR's Deployment section
+5. Include a ready-to-use list of key names and default English values for any missing entries
+6. If no new user-facing strings detected, note: "No new translatable strings introduced."
+
+**D. Migration Safety** *(if PR includes Django migrations)*
+
+1. Detect any new or modified files under `*/migrations/`
+2. For each migration file, read the full migration and analyze:
+   - **Long-running operations**: large table alterations, adding non-nullable columns without defaults, bulk data operations
+   - **Missing indexes**: foreign keys or frequently-queried fields added without `db_index=True`
+   - **Unsafe schema changes**: dropping columns, renaming columns/tables, changing field types
+   - **Data loss risk**: any `RunPython` that modifies or deletes existing rows
+   - **Dependency ordering**: `dependencies` list correct relative to other migrations in the PR
+3. Document each concern with the migration file and operation name
+4. Note: "Migration must be confirmed to apply cleanly via `python manage.py migrate` on a local branch pull before approving — it runs automatically on staging at merge."
+5. If no migrations detected, note: "No database migrations in this PR."
+
+---
+
+#### Step 2.6: Generate Review Document
 
 **Create comprehensive review in Markdown format:**
 
@@ -240,9 +230,9 @@ For each PR found:
 
 ---
 
-## Junior Developer Explanation
+## PR Overview
 
-{2-3 paragraph explanation of what this PR does, written for someone new to the codebase}
+{1-2 paragraph explanation of what this PR does and why, written accessibly for someone new to the codebase}
 
 ### What Problem Does This Solve?
 
@@ -250,11 +240,14 @@ For each PR found:
 
 ### How Does It Work?
 
-{High-level explanation with analogy}
+{Organized as subheadings representing broad effects of the PR. Under each subheading, bullet points list the specific code changes that contribute to that effect. Focus on what the changes do in the context of the repo — no analogies.}
 
-**Analogy**: {Real-world comparison that makes the concept relatable}
+#### {Broad Effect 1}
+- {Specific change that contributes to this effect}
+- {Another specific change}
 
-Example: "Think of this component like a restaurant menu. The parent component (restaurant) passes down available dishes (props), and this component displays them in different sections (breakfast, lunch, dinner). When a customer (user) selects an item, it sends the order (callback) back to the restaurant to process."
+#### {Broad Effect 2}
+- {Specific change}
 
 ---
 
@@ -282,42 +275,30 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 ---
 
-## Staff Engineer Review
+## Code Review
 
-### Architecture & Design
+### {Broad Change 1 — e.g., "Remove dead code stub"}
 
-**Strengths:**
-- {List architectural wins}
-- {Design patterns used correctly}
+{Short explanation of what should change and why}
 
-**Concerns:**
-- {Architectural issues}
-- {Design pattern violations}
+```python
+# Before
+{existing code}
 
-**Recommendations:**
-- {Suggested improvements}
+# After
+{recommended code}
+```
 
-### Code Quality
+### {Broad Change 2 — e.g., "Tighten age-guard logic"}
 
-**Strengths:**
-- {Clean code examples}
-- {Good practices followed}
+{Short explanation}
 
-**Needs Improvement:**
-- {Code smells}
-- {Complexity issues}
-- {Missing patterns}
+```python
+# Recommended
+{code block}
+```
 
-### Testing
-
-**Current Coverage:**
-- {Test files added/modified}
-- {Types of tests: unit, integration, e2e}
-
-**Gaps:**
-- {Missing test scenarios}
-- {Edge cases not covered}
-- {Recommended additional tests}
+{Add or omit code blocks as needed — not every recommendation requires one, but include one whenever it clarifies the change}
 
 ---
 
@@ -368,6 +349,70 @@ Example: "Think of this component like a restaurant menu. The parent component (
 
 ---
 
+## Business Logic Correctness
+
+{Skip section with "N/A — no eligibility logic modified" if not applicable}
+
+**Spec compared**: `programs/programs/{state}/{program}/spec.md`
+
+**Correctly implemented:**
+- {Rules from spec that the code handles correctly}
+
+**Discrepancies found:**
+- {Rule | Spec says X | Code does Y}
+
+**Spec rules not covered:**
+- {Any eligibility conditions or benefit calculations in the spec with no corresponding implementation}
+
+---
+
+## White-Label / Multi-Tenant Impact
+
+**White labels referencing changed code:**
+- {WhiteLabel name | file | what it references}
+
+**Potential behavioral differences:**
+- {Description of how a specific white label could be affected}
+
+**Config updates required:**
+- {Any white label configs that need changes alongside this PR, or "None identified"}
+
+---
+
+## Translation Completeness
+
+{Skip section with "N/A — no new user-facing strings" if not applicable}
+
+**New strings requiring translation keys:**
+
+| String | Translation Key | Status |
+|--------|----------------|--------|
+| {string text} | {key name} | Missing / Present / Not in Deployment section |
+
+**Missing from PR Deployment section:**
+- {key: `key_name`, default: `"English value"`}
+
+---
+
+## Migration Safety
+
+{Skip section with "N/A — no migrations in this PR" if not applicable}
+
+**Migrations reviewed:**
+- {migration filename}
+
+**Findings:**
+
+| Operation | Risk | Detail |
+|-----------|------|--------|
+| {AlterField / AddField / etc.} | {High/Medium/Low/None} | {Explanation} |
+
+**Overall assessment**: {Safe to merge / Needs review / Blocking concern}
+
+**Reminder**: Pull branch locally and run `python manage.py migrate` to confirm it applies cleanly before approving.
+
+---
+
 ## Checklist
 
 - [ ] Code follows project conventions (Django/React patterns)
@@ -379,6 +424,10 @@ Example: "Think of this component like a restaurant menu. The parent component (
 - [ ] Error handling is robust
 - [ ] Accessibility requirements met (frontend)
 - [ ] Documentation updated if needed
+- [ ] Business logic matches program spec (if applicable)
+- [ ] White label impact assessed
+- [ ] Translation keys added for all new user-facing strings (if applicable)
+- [ ] Migration safety verified (if applicable)
 
 ---
 
@@ -406,74 +455,23 @@ Example: "Think of this component like a restaurant menu. The parent component (
    - Save as `pull-request-reviews/{TICKET-NUMBER}.md`
    - Use ticket number from Linear (e.g., `MFB-123.md`)
 
-6. **Progress update**
-   ```
-   Generated review for MFB-123 (PR #456)
-     Saved to: pull-request-reviews/MFB-123.md
-
-   Continuing with next PR...
-   ```
-
-### Phase 3: Summary (Automated)
-
-After all PRs reviewed:
-
-1. **Generate summary report**
+6. **Completion summary**
    ```
    Code Review Complete!
 
-   Reviewed 5 tickets (7 PRs) in Code Review:
+   Ticket: MFB-123
+   Review saved to: pull-request-reviews/MFB-123.md
 
-   MFB-123: pull-request-reviews/MFB-123.md (2 PRs)
-   MFB-124: pull-request-reviews/MFB-124.md (1 PR)
-   MFB-125: pull-request-reviews/MFB-125.md (1 PR)
-   MFB-126: pull-request-reviews/MFB-126.md (2 PRs)
-   MFB-127: pull-request-reviews/MFB-127.md (1 PR)
+   Recommendation: {APPROVE / REQUEST CHANGES / NEEDS DISCUSSION}
 
-   Security Alerts: 2 PRs flagged for security review
-   - MFB-123: Input validation concerns
-   - MFB-126: Potential XSS vulnerability
-
-   Breaking Changes: 1 PR has breaking changes
-   - MFB-124: API endpoint signature changed
-
-   Recommendations:
-   - 3 PRs ready to approve
-   - 2 PRs need security fixes
-   - 2 PRs need discussion with team
-
-   Next Steps:
-   1. Review security concerns in flagged PRs
-   2. Address breaking changes in MFB-124
-   3. Read individual reviews in pull-request-reviews/ directory
-   ```
-
-2. **List all generated files**
-   ```bash
-   ls -lh pull-request-reviews/
+   Key issues:
+   - {Top concern, if any}
+   - {Second concern, if any}
    ```
 
 ## Error Handling
 
-### If No Tickets in Code Review
-
-```
-No tickets found in "Code Review" state
-
-Checked:
-- Team: MFB - Web
-- State: Code Review
-- Found: 0 tickets
-
-Possible reasons:
-- All code reviews completed
-- Tickets in different state (In Progress, Done, etc.)
-- Team name or state changed
-
-Check Linear workspace to verify.
-```
-
-### If Specific Ticket Not Found
+### If Ticket Not Found
 
 ```
 Error: Ticket MFB-999 not found
@@ -491,20 +489,12 @@ Verify the ticket ID and try again.
 ### If Ticket Has No PRs
 
 ```
-Warning: MFB-123 has no linked PRs
+No PR link found for MFB-123 ("Add SNAP eligibility calculator").
 
-Ticket: "Add SNAP eligibility calculator"
-State: Code Review
-
-The Linear-GitHub integration may not have linked the PR, or the PR URL may not be in the ticket description.
-
-Options:
-A) Skip this ticket
-B) Manually provide PR number
-C) Stop workflow
-
-Which option? (A/B/C)
+Please paste the GitHub PR URL(s) for this ticket:
 ```
+
+Wait for the user to provide the URL(s), then continue with Phase 2. Do not attempt to search git history or branches.
 
 ### If PR Cannot Be Fetched
 
@@ -518,8 +508,6 @@ Possible issues:
 - PR has been deleted
 
 Try: gh pr view 456 --repo owner/repo
-
-Skip this PR and continue? (y/n)
 ```
 
 ### If Review Generation Fails
@@ -531,8 +519,6 @@ Error: {error details}
 
 The review was partially generated and saved to:
 pull-request-reviews/MFB-123.partial.md
-
-Continue with remaining PRs? (y/n)
 ```
 
 ## Best Practices
@@ -540,12 +526,12 @@ Continue with remaining PRs? (y/n)
 ### Review Quality
 
 **Always include:**
-- Junior-friendly explanation with analogies
+- Junior-friendly PR overview written for someone new to the codebase
 - At least 2 Mermaid diagrams showing architecture/flow
 - Staff-level technical insights
 - Security analysis for every PR
 - Impact analysis with dependency checking
-- Concrete recommendations with examples
+- Concrete recommendations with code examples
 
 **Diagrams should:**
 - Use appropriate Mermaid diagram types
@@ -564,18 +550,16 @@ Continue with remaining PRs? (y/n)
 
 ### Writing Style
 
-**For junior developers:**
+**For the PR Overview:**
 - Avoid jargon or explain it when used
-- Use real-world analogies
 - Explain "why" not just "what"
-- Include code examples in recommendations
-- Be encouraging about good patterns found
+- Keep it accessible — assume the reader knows how to code but not this codebase
 
-**For staff engineer section:**
+**For the Code Review section:**
 - Be precise and technical
 - Reference design patterns by name
 - Point to specific line numbers and files
-- Provide architectural alternatives
+- Provide concrete recommended code blocks
 - Cite framework best practices
 
 ### Impact Analysis
@@ -591,10 +575,8 @@ Continue with remaining PRs? (y/n)
 ### Efficiency
 
 **Optimize the workflow:**
-- Run PR fetches in parallel when possible
 - Use Glob/Grep for dependency searches
 - Read files in batch when reviewing related changes
-- Cache repository context across PRs in same repo
 
 ## Diagram Examples
 
@@ -672,46 +654,34 @@ erDiagram
 
 ## File Organization
 
-```
-pull-request-reviews/
-├── MFB-123.md          # SNAP calculator review
-├── MFB-124.md          # White label UI review
-├── MFB-125.md          # Income validation review
-├── MFB-126.md          # Data pipeline review
-└── MFB-127.md          # Authentication fix review
-```
+Reviews are saved as `pull-request-reviews/{TICKET-NUMBER}.md` (e.g., `pull-request-reviews/MFB-123.md`).
 
 ## Integration with Team Workflow
 
-1. **Discovery**: Linear MCP finds tickets in Code Review
-2. **Analysis**: Claude reviews each PR comprehensively
-3. **Documentation**: Reviews saved locally for team reference
-4. **Discussion**: Team reads reviews, discusses concerns
+1. **Invocation**: User runs `/linear-code-review MFB-123`
+2. **Analysis**: Claude reviews the ticket's PR(s) comprehensively
+3. **Documentation**: Review saved locally for team reference
+4. **Discussion**: Team reads review, discusses concerns
 5. **Action**: Address security/impact issues before merge
-6. **Learning**: Junior devs learn from explanations and diagrams
 
 ## Success Criteria
 
-- All Code Review tickets discovered
-- All PRs found and analyzed
-- Reviews are junior-dev friendly with analogies
+- Ticket fetched and PR(s) found
+- PR Overview is accessible to someone new to the codebase
 - At least 2 diagrams per review
-- Security analysis complete for every PR
+- Security analysis complete
 - Impact analysis identifies dependencies
 - Staff-level insights for architecture/design
-- All reviews saved to pull-request-reviews/ directory
-- Summary report generated
-- No PRs skipped without user approval
+- Review saved to pull-request-reviews/ directory
 
 ## Notes
 
-- Reviews are **educational** - help team learn, not just critique
-- Use **Mermaid diagrams** extensively - visual learning is powerful
-- **Security is critical** - every PR gets thorough security review
-- **Impact analysis prevents bugs** - find breaking changes before merge
-- Reviews are **saved locally** - team can reference and learn from them
-- Multiple PRs per ticket are **common** - handle gracefully
+- Reviews are **educational** — help team understand changes, not just critique
+- Use **Mermaid diagrams** extensively — visual learning is powerful
+- **Security is critical** — every PR gets thorough security review
+- **Impact analysis prevents bugs** — find breaking changes before merge
+- Reviews are **saved locally** — team can reference and learn from them
 
 ---
 
-**Remember**: The goal is to help the whole team (especially junior developers) understand the code deeply, catch issues early, and maintain high quality standards. Reviews should be thorough but kind, technical but accessible.
+**Remember**: The goal is to help the whole team understand the code deeply, catch issues early, and maintain high quality standards. Reviews should be thorough, technical, and accessible.
