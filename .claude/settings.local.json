@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(git mv:*)",
-      "Bash(gh *)",
+      "Bash(gh issue list *)",
+      "Bash(gh issue view *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr view *)",
+      "Bash(gh api *)",
       "Bash(ls *)",
       "Bash(mkdir *)",
       "mcp__df6087b2-a149-4eed-bced-0cc20adc08b3__get_issue",
