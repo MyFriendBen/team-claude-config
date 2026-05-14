@@ -173,33 +173,10 @@ Run these checks automatically for every PR. Each is conditional on what the PR 
    - Rules implemented correctly
    - Any discrepancies between spec and code (wrong thresholds, missing conditions, incorrect benefit amounts)
    - Any spec rules not covered by the implementation
-5. If no calculator changes detected, note: "Not applicable — no eligibility logic modified in this PR."
+5. **Important**: The validation JSON (`validations/.../data/{program}.json`) is only ever expected to contain 3 scenarios — it is not meant to cover every scenario defined in `spec.md`. The spec's full scenario list is for Playwright end-to-end testing and manual QA; the validation JSON covers a small representative subset for the automated validation harness. Do not flag missing validation scenarios as a gap.
+6. If no calculator changes detected, note: "Not applicable — no eligibility logic modified in this PR."
 
-**B. White-Label / Multi-Tenant Behavior** *(always run)*
-
-1. Identify all functions, classes, API endpoints, or model fields changed in the PR
-2. Search white label config files (e.g., `configuration/`, `whitelabel/`, any `*white_label*` or `*whitelabel*` files) for references to those identifiers
-3. Check for any white-label-specific overrides that interact with the changed code
-4. Document:
-   - Which white labels reference the changed code
-   - Whether any white label could behave differently or break
-   - Any white labels that need config updates alongside this PR
-5. If no white-label-specific impact found, note: "No white label configurations reference the changed code."
-
-**C. Translation Completeness** *(if PR introduces new user-facing strings)*
-
-1. Scan the diff for new hardcoded strings rendered in the UI (React components, Django templates, serializer messages, error text)
-2. Check whether each string has a corresponding translation key (look for `Translation` model usage, i18n patterns, or translation key references)
-3. Check the PR description for a "Deployment" section that lists new translation keys
-4. Document:
-   - All new user-facing strings found
-   - Which ones already have translation keys wired up
-   - Which ones are missing translation keys entirely
-   - Which ones have keys but are not documented in the PR's Deployment section
-5. Include a ready-to-use list of key names and default English values for any missing entries
-6. If no new user-facing strings detected, note: "No new translatable strings introduced."
-
-**D. Migration Safety** *(if PR includes Django migrations)*
+**B. Migration Safety** *(if PR includes Django migrations)*
 
 1. Detect any new or modified files under `*/migrations/`
 2. For each migration file, read the full migration and analyze:
@@ -277,28 +254,48 @@ Run these checks automatically for every PR. Each is conditional on what the PR 
 
 ## Code Review
 
-### {Broad Change 1 — e.g., "Remove dead code stub"}
+### {Broad Change 1 — e.g., "Fix @staticmethod referencing self"}
 
-{Short explanation of what should change and why}
+**`path/to/file.py`, lines N–M**
 
-```python
-# Before
-{existing code}
+{Short explanation of the problem and why it needs to change}
 
-# After
-{recommended code}
+```diff
+- @staticmethod
+- def _is_under_fra(birth_year: int, birth_month: Optional[int]) -> bool:
+-     fra_years, fra_months = WaSsdi._get_fra(birth_year)
+-     if birth_month is None:
+-         birth_month = 1
+-     fra_date = date(...)
+-     today = self.screen.get_reference_date()
+-     return today < fra_date
++ @staticmethod
++ def _is_under_fra(birth_year: int, birth_month: Optional[int], reference_date: date) -> bool:
++     fra_years, fra_months = WaSsdi._get_fra(birth_year)
++     if birth_month is None:
++         birth_month = 1
++     fra_date = date(...)
++     return reference_date < fra_date
 ```
 
-### {Broad Change 2 — e.g., "Tighten age-guard logic"}
+{Explain what the diff accomplishes and any follow-on changes required elsewhere}
+
+### {Broad Change 2 — e.g., "Update call site after signature change"}
+
+**`path/to/file.py`, lines N–M**
 
 {Short explanation}
 
-```python
-# Recommended
-{code block}
+```diff
+- e.condition(self._is_under_fra(member.birth_year, member.birth_month))
++ e.condition(self._is_under_fra(
++     member.birth_year,
++     member.birth_month,
++     self.screen.get_reference_date(),
++ ))
 ```
 
-{Add or omit code blocks as needed — not every recommendation requires one, but include one whenever it clarifies the change}
+{Every recommendation must show an actual diff using `+`/`-` lines against the real code from the PR. Do not use placeholder variable names or describe changes in prose when a diff can show them directly. Include the file path and approximate line numbers above each diff block.}
 
 ---
 
@@ -366,34 +363,6 @@ Run these checks automatically for every PR. Each is conditional on what the PR 
 
 ---
 
-## White-Label / Multi-Tenant Impact
-
-**White labels referencing changed code:**
-- {WhiteLabel name | file | what it references}
-
-**Potential behavioral differences:**
-- {Description of how a specific white label could be affected}
-
-**Config updates required:**
-- {Any white label configs that need changes alongside this PR, or "None identified"}
-
----
-
-## Translation Completeness
-
-{Skip section with "N/A — no new user-facing strings" if not applicable}
-
-**New strings requiring translation keys:**
-
-| String | Translation Key | Status |
-|--------|----------------|--------|
-| {string text} | {key name} | Missing / Present / Not in Deployment section |
-
-**Missing from PR Deployment section:**
-- {key: `key_name`, default: `"English value"`}
-
----
-
 ## Migration Safety
 
 {Skip section with "N/A — no migrations in this PR" if not applicable}
@@ -425,8 +394,6 @@ Run these checks automatically for every PR. Each is conditional on what the PR 
 - [ ] Accessibility requirements met (frontend)
 - [ ] Documentation updated if needed
 - [ ] Business logic matches program spec (if applicable)
-- [ ] White label impact assessed
-- [ ] Translation keys added for all new user-facing strings (if applicable)
 - [ ] Migration safety verified (if applicable)
 
 ---
@@ -558,8 +525,10 @@ pull-request-reviews/MFB-123.partial.md
 **For the Code Review section:**
 - Be precise and technical
 - Reference design patterns by name
-- Point to specific line numbers and files
-- Provide concrete recommended code blocks
+- Always include the file path and line numbers above each diff block
+- Show changes as unified diffs (`+`/`-` lines) against the actual code from the PR — never describe a change in prose when a diff can show it directly
+- Use `diff` code fences so the syntax is highlighted correctly
+- Every non-trivial recommendation must have a diff; prose-only recommendations are not acceptable
 - Cite framework best practices
 
 ### Impact Analysis
