@@ -23,6 +23,7 @@ Systematically review and respond to CodeRabbit feedback on pull requests.
 The following workflows have been promoted to **skills** (in the `skills/` directory) for enhanced capabilities like supporting files, context isolation, and tool restrictions:
 
 - **`/check-program-links`** - Audit program URLs and generate SQL updates. See [skills/check-program-links/](../skills/check-program-links/)
+- **`/discovery-review`** - Review program researcher artifacts for accuracy, format, and completeness. See [skills/discovery-review/](../skills/discovery-review/)
 - **`/linear-code-review`** - Comprehensive PR analysis with diagrams. Runs in forked context. See [skills/linear-code-review/](../skills/linear-code-review/)
 - **`/playwright-qa-execution`** - Automated QA testing via Playwright MCP. See [skills/playwright-qa-execution/](../skills/playwright-qa-execution/)
 

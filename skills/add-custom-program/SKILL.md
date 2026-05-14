@@ -107,8 +107,8 @@ The calculator is a subclass of `ProgramCalculator`. Map spec criteria to overri
 |-----------|----------|---------|
 | Household-level condition (income, location, assets) | `household_eligible(self, e: Eligibility)` | `e.condition(bool_expr, messages.xxx())` |
 | Per-member condition (age, disability, pregnancy) | `member_eligible(self, e: MemberEligibility)` | `e.condition(bool_expr)` |
-| Fixed benefit for the whole household | Class attribute `amount = N` | Or override `household_value()` |
-| Per-member benefit amount | Class attribute `member_amount = N` | Or override `member_value(member)` |
+| Fixed benefit for the whole household | Class attribute `amount = N` (**annual**) | Or override `household_value()` — return annual value |
+| Per-member benefit amount | Class attribute `member_amount = N` (**annual**) | Or override `member_value(member)` — return annual value |
 | Variable benefit (depends on member attributes) | Override `member_value(member)` or `household_value()` | Return different amounts based on conditions |
 | Custom value assignment (e.g. per eligible member) | Override `value(self, e: Eligibility)` | Iterate `e.eligible_members` and set `.value` |
 
@@ -293,16 +293,18 @@ e.condition(member.age is not None and self.min_age <= member.age <= self.max_ag
 
 **Tiered member_value based on age or income:**
 ```python
+# All returned values must be annual — multiply monthly spec amounts by 12
 def member_value(self, member):
     if member.age <= self.max_age_preschool:
-        return self.preschool_value
+        return self.preschool_value   # e.g. preschool_value = 300 * 12
     elif member.age < self.max_age_afterschool:
-        return self.afterschool_value
+        return self.afterschool_value  # e.g. afterschool_value = 200 * 12
     return 0
 ```
 
 **Spouse income aggregation (tax credit programs):**
 ```python
+# income_limits values must be annual amounts (monthly spec values × 12)
 def member_value(self, member):
     income = member.calc_gross_income("yearly", ["all"])
     if member.is_married()["is_married"]:
@@ -310,7 +312,7 @@ def member_value(self, member):
         income += spouse.calc_gross_income("yearly", ["all"])
     for threshold, value in self.income_limits.items():
         if income <= threshold:
-            return value
+            return value  # annual value
     return 0
 ```
 
@@ -337,6 +339,27 @@ When calling `calc_gross_income(frequency, types)`, the `types` list uses these 
 
 Note the camelCase conventions — `"sSI"`, `"sSDisability"`, and `"sSRetirement"` all start with lowercase `s`. These are the actual database values, not display names. Using the wrong token (e.g. `"socialSecurity"` instead of `"sSRetirement"`) will silently return 0 and produce incorrect eligibility results.
 
+### Benefit value units — ALWAYS annual
+
+**All benefit amounts stored in the calculator must be annual (yearly) values, not monthly.**
+
+The frontend is responsible for dividing by 12 to display monthly estimates — the backend only stores and returns annual figures. This applies to every value field: `amount`, `member_amount`, and any value returned from `household_value()`, `member_value()`, or `value()`.
+
+When the spec describes a monthly benefit, multiply by 12 before assigning it:
+
+```python
+# Spec says "$50/month per eligible member" → store as annual
+member_amount = 50 * 12   # $600/year
+
+# Spec says "$60/month household benefit" → store as annual
+amount = 60 * 12          # $720/year
+
+# Spec says "$1,634/month average payment" → store as annual
+member_amount = 1_634 * 12  # $19,608/year
+```
+
+Never assign a raw monthly value (e.g. `member_amount = 50`) — this will cause the displayed amount to appear 12× too low.
+
 ### Common class attributes
 
 ```python
@@ -347,9 +370,9 @@ smi_percent = 0.6            # SMI multiplier
 income_limit = 1_620         # Fixed monthly threshold
 asset_limit = 1_000_000      # Resource limit
 
-# Benefit amounts
-amount = 1_000               # Household-level fixed amount
-member_amount = 150           # Per-eligible-member fixed amount
+# Benefit amounts — always annual values (multiply monthly specs by 12)
+amount = 12_000              # Household-level fixed annual amount ($1,000/month × 12)
+member_amount = 1_800        # Per-eligible-member fixed annual amount ($150/month × 12)
 
 # Age thresholds
 min_age = 3
