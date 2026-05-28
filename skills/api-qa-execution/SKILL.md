@@ -16,9 +16,10 @@ Automates benefits screener testing by sending direct API calls instead of drivi
 This skill:
 1. Fetches a Linear ticket and downloads its attached `{state}_{program}_spec.md` (if running in `local` environment) or finds the `{state}_{program}_spec.md` in the `benefits-api` repo (when running in `staging` or `production` environment)
 2. Extracts program details and test scenarios from the spec
-3. For each scenario: builds a Screen API payload, POSTs to `/api/screens/`, GETs `/api/eligibility/{uuid}`
-4. Compares actual eligibility results against expected outcomes
-5. Documents results in local `qa/` directory
+3. Classifies each scenario as API-testable or frontend-only (skipping scenarios that test display behavior, UI rendering, or other conditions only verifiable in a browser)
+4. For each API-testable scenario: builds a Screen API payload, POSTs to `/api/screens/`, GETs `/api/eligibility/{uuid}`
+5. Compares actual eligibility results against expected outcomes
+6. Documents results in local `qa/` directory, with a dedicated section listing frontend-only scenarios that need browser testing
 
 ---
 
@@ -119,26 +120,79 @@ Are you sure you want to proceed? (yes/no)
    
    If the Expected line contains no numeric value (e.g., just `Eligible` or `Not eligible` or `No value`), set expected_estimated_value to `null`. Only compare values when the spec explicitly provides one.
 
-6. **Present summary to user:**
+6. **Classify each scenario as API-testable or frontend-only.**
+
+   Some spec scenarios describe conditions that can only be verified in the browser. After parsing all scenarios, check each one against the frontend-only detection rules below and mark it accordingly.
+
+   #### Frontend-Only Detection Rules
+
+   A scenario is **frontend-only** (skip from API execution) if ANY of these conditions are true:
+
+   **a. Expected outcome references display behavior:**
+   The `**Expected:**` line (or surrounding description) contains phrases indicating the test is about what the UI shows, not what the API calculates:
+   - "warning message", "action item", "info message", "information message"
+   - "displayed", "should display", "should show", "should appear", "visible", "hidden"
+   - "category", "grouped under", "appears under", "section"
+   - "learn more link", "apply button", "apply link", "button text"
+   - "navigator", "resource referral", "referral displayed"
+   - "document required", "documentation", "required documents"
+   - "translation", "in Spanish", "in English", "language display"
+   - "estimated value override" (the text override, not the numeric value)
+   - "description", "program card", "card text", "program description should"
+
+   **b. Expected outcome cannot be parsed as eligibility + optional value:**
+   If the `**Expected:**` line does not contain "Eligible" or "Not eligible" (case-insensitive, including variants like "Ineligible") AND does not match a recognizable eligibility pattern, it is likely a frontend-specific check. Examples:
+   - "Expected: Warning about citizenship requirement is shown"
+   - "Expected: Program appears in Healthcare category"
+   - "Expected: Apply link opens in new tab"
+
+   **c. Scenario explicitly states it requires browser/frontend testing:**
+   The scenario description or "What this checks" line mentions:
+   - "frontend", "browser", "UI", "visual", "rendering"
+   - "form field", "wizard step", "form validation"
+   - "conditional display", "field visibility"
+
+   **d. Scenario tests data the API payload cannot express:**
+   The scenario steps reference input fields that don't exist in the Screen/HouseholdMember API:
+   - Specific screener question visibility ("When user selects X, field Y appears")
+   - Form validation behavior ("Entering negative income shows error")
+   - Navigation flow ("User returns to step 2 and changes answer")
+
+   #### What is NOT frontend-only
+
+   These are common spec patterns that ARE testable via API — do not skip them:
+   - `Citizenship: U.S. Citizen` in steps — The API ignores citizenship (it's config-level via `legal_status_required`). The eligibility result is still correct without it.
+   - `already_has` / display suppression scenarios — The API returns `already_has: true`, which the skill already handles.
+   - Scenarios mentioning "should not be shown" when referring to eligibility suppression — This means "Not eligible" via the `already_has` flag, which is API-testable.
+   - Expected lines with just "Eligible" or "Not eligible" plus optional value — These are standard API scenarios.
+   - `housing_situation` mentioned in spec context but not in scenario steps — Only skip if the scenario steps require setting `housing_situation` AND the expected outcome depends on it.
+
+7. **Present summary to user:**
    ```
    Linear Ticket: MFB-1234
    Program: Head Start
    State: TX
    White Label: tx
    Environment: STAGING
-   API Base: https://benefits-calculator-staging.herokuapp.com
-   Test Scenarios: 11
+   API Base: https://cobenefits-api-staging.herokuapp.com
+   Test Scenarios: 11 (9 API-testable, 2 frontend-only)
+
+   Frontend-only scenarios (will be skipped):
+   - Scenario 5: "Warning message about citizenship" — tests display behavior
+   - Scenario 9: "Program card category placement" — tests UI rendering
 
    Ready to execute? (y/n)
    ```
 
-7. **Create output directory and initialize results file.**
+   If there are frontend-only scenarios, list them with the reason they were classified as frontend-only. The user can override if they believe a scenario was misclassified.
+
+8. **Create output directory and initialize results file.**
 
 ---
 
 ### Phase 2: Build API Payloads
 
-For each test scenario, construct a Screen API payload. The payload format matches the validation JSON schema at `validations/management/commands/import_validations/test_case_schema.json`.
+For each **API-testable** scenario (skip frontend-only scenarios), construct a Screen API payload. The payload format matches the validation JSON schema at `validations/management/commands/import_validations/test_case_schema.json`.
 
 #### Payload Template
 
@@ -259,6 +313,36 @@ For each test scenario, construct a Screen API payload. The payload format match
 | None | (all false) |
 
 **Note:** For any program not in this table, check `screener/models.py` — search for the `name_abbreviated` in the `current_benefits` property (e.g. `"wa_eitc": self.has_eitc`). The screener model maps each program name to its `has_*` boolean field.
+
+**Expenses mapping** (spec text → expense object in `expenses` array):
+
+The `expenses` field is a **required** top-level array in the Screen payload. It cannot be omitted — use `"expenses": []` when the scenario has no expenses. Each expense object has three required fields: `type`, `amount`, and `frequency`.
+
+| Spec Text | API `type` Value | Category |
+|---|---|---|
+| Rent | `rent` | housing |
+| Mortgage | `mortgage` | housing |
+| Property Taxes | `propertyTax` | housing |
+| HOA / Condo Association Fees | `hoa` | housing |
+| Homeowners Insurance | `homeownersInsurance` | housing |
+| Heating | `heating` | utilities |
+| Cooling | `cooling` | utilities |
+| Telephone | `telephone` | utilities |
+| Internet | `internet` | utilities |
+| Other Utilities | `otherUtilities` | utilities |
+| Medical Insurance / Medical Bills | `medical` | healthcare |
+| Child Care | `childCare` | dependentCare |
+| Child Support (Paid) | `childSupport` | dependentCare |
+| Dependent Care | `dependentCare` | dependentCare |
+
+Expense `frequency` uses the same values as income: `monthly`, `weekly`, `biweekly`, `semimonthly`, `yearly`.
+
+**Example expense object:**
+```json
+{"type": "rent", "amount": 1200.00, "frequency": "monthly"}
+```
+
+**When to include expenses:** Most spec scenarios don't mention expenses — use `"expenses": []`. If a scenario's steps mention housing costs, rent, utilities, medical expenses, or child care costs, map them to the appropriate expense type. Some program calculators (e.g., Emergency Rental Assistance, Energy Assistance, SNAP shelter deductions) use expenses in eligibility checks, so including them when specified in the scenario is important for accurate results.
 
 **Condition flags** (spec text → API field on household member):
 | Spec Text | API Field |
@@ -527,8 +611,11 @@ Create: `{outputDir}/{TICKET-ID}-{program}-api-results.md`
 | 2 | Income boundary | Eligible | Eligible | $828 | $1,200 | FAIL | FAIL | def-456 |
 | 3 | Child too young | Not eligible | Not eligible | — | — | N/A | PASS | ghi-789 |
 | 4 | Income too high | Not eligible | Eligible | — | $10,517 | N/A | FAIL | jkl-012 |
-| 5 | Basic eligible, no value in spec | Eligible | Eligible | N/A | $10,517 | N/A | PASS | mno-345 |
+| 5 | Warning message display | — | — | — | — | — | SKIPPED | — |
+| 6 | Basic eligible, no value in spec | Eligible | Eligible | N/A | $10,517 | N/A | PASS | mno-345 |
 ```
+
+Frontend-only scenarios appear in the table as `SKIPPED` with dashes for all result columns, keeping the scenario numbering consistent with the spec.
 
 ### Failure Details
 
@@ -571,25 +658,47 @@ For each FAIL, append detailed diagnostics:
 ## Summary
 
 - **Total Scenarios:** 11
-- **Passed:** 8
-- **Failed:** 3
-  - Eligibility mismatches: 2
+- **API-Tested:** 9
+- **Passed:** 7
+- **Failed:** 2
+  - Eligibility mismatches: 1
   - Value mismatches: 1
 - **Errors:** 0 (API failures)
-- **Pass Rate:** 72.7%
+- **Frontend-Only (skipped):** 2
+- **Pass Rate:** 77.8% (7/9 API-tested scenarios)
 
 ## Failed Scenarios
 
 1. **Scenario 2** — Value mismatch: expected $828, got $1,200 (eligibility correct)
 2. **Scenario 4** — Income too high but still shown as eligible
-3. **Scenario 7** — Age boundary not enforced
 
 ## Recommendations
 
 - Fix benefit value calculation — Scenario 2 returns $1,200 but spec expects $828
 - Fix income threshold validation in calculator
-- Review age boundary logic
 - Re-run after fixes: `/api-qa-execution MFB-1234 staging`
+```
+
+### Frontend-Only Scenarios Section
+
+After the Summary, include a section listing all scenarios that were skipped because they require browser testing. This section is always present — if no scenarios were skipped, state "None — all scenarios were API-testable."
+
+```markdown
+## Frontend-Only Scenarios (Requires Browser Testing)
+
+The following scenarios were skipped because they test conditions that can only be verified in the browser. Use Playwright or manual browser testing to validate these.
+
+| # | Description | Reason Skipped |
+|---|-------------|----------------|
+| 5 | Warning message about citizenship requirement | Tests display of warning_message text — requires visual verification |
+| 9 | Program card appears in Healthcare category | Tests result page category grouping — frontend rendering concern |
+
+### How to test these scenarios
+
+These scenarios should be tested using the Playwright QA skill or manual browser testing:
+- Navigate to the screener for the appropriate white label
+- Enter the household data from the scenario steps
+- Submit and verify the results page for the expected display behavior
 ```
 
 ---
@@ -625,7 +734,7 @@ Please provide an API key:
 ### Screen Creation Fails (400)
 Log the validation error from the response body. Common causes:
 - Invalid ZIP code format
-- Missing required fields
+- Missing required fields (especially `expenses` — must be `[]` even if empty)
 - Birth date in future
 Document as `ERROR` (not FAIL) and continue.
 
@@ -684,13 +793,15 @@ If the target program doesn't appear in the eligibility response at all:
 9. **SNAP student restriction age boundary** — 7 CFR 273.5 applies only to individuals aged 18–49. A spec scenario expecting a person under 18 to be ineligible due to student status is incorrect; the restriction doesn't apply below 18. PolicyEngine correctly returns Eligible for under-18 students. Flag this as a spec issue if encountered.
 10. **`already_has: true` still has a non-zero `estimated_value`** — this is the benefit amount the household would receive if they didn't already have it. It does not affect result evaluation (still "Not eligible"), but confirms the program calculated correctly. Value comparison is skipped for `already_has` scenarios.
 11. **Value comparison uses the raw integer from the API** — the `estimated_value` field is an integer (truncated from decimal). When parsing the spec's expected value, strip `$`, commas, and decimal portions to compare integers. For example, spec says `$2,484` → compare against API integer `2484`.
+12. **`expenses` is a required field** — The Screen serializer requires `"expenses"` in every POST payload. Omitting it returns `400 Bad Request` with `{"expenses": ["This field is required."]}`. Always include `"expenses": []` even when the scenario has no expenses. See the Expenses mapping table in Phase 2 for available expense types.
 
 ---
 
 ## Quality Gates
 
-- All scenarios must be executed (no skipping)
-- Results must include Screen UUID for every scenario (enables debugging)
+- All API-testable scenarios must be executed (no skipping except frontend-only)
+- Frontend-only scenarios must be listed in the "Frontend-Only Scenarios" section with the reason they were skipped
+- Results must include Screen UUID for every API-tested scenario (enables debugging)
 - Failed scenarios must include the full payload sent and eligibility response diagnostics
-- Summary section required with pass rate
+- Summary section required with pass rate (calculated from API-tested scenarios only, excluding frontend-only)
 - Results file must be written incrementally (don't lose progress on error)
