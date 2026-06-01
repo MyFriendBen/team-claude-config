@@ -209,8 +209,9 @@ translated records written across languages) before moving on.
 ## Troubleshooting
 
 - **`heroku run` won't accept stdin** — use a `heroku run bash` session, write the JSON to a
-  file on the dyno (heredoc), and run the command against it; or temporarily commit the map to
-  `benefits-api/translations/management/commands/data/` and run from there.
+  temp file on the dyno (heredoc into e.g. `/tmp/map.json`), and run the command against that
+  path. Do NOT commit the map into the repo — translation maps are never checked in; they are
+  regenerated from PR code each run.
 - **Django won't boot locally** (`ModuleNotFoundError: django`) — the local `venv` isn't set
   up; have the user activate/install deps, or run the dry-run against staging instead.
 - **ICU placeholder mangled by translation** (e.g. `{rewiringAmerica}` altered in a language) —
