@@ -56,17 +56,18 @@ Command invocations by environment:
 python manage.py add_translations /tmp/mfb-translations/<pr>.json --dry-run
 python manage.py add_translations /tmp/mfb-translations/<pr>.json
 
-# staging
-heroku run -a cobenefits-api-staging "python manage.py add_translations - --dry-run" < /tmp/mfb-translations/<pr>.json
-heroku run -a cobenefits-api-staging "python manage.py add_translations -" < /tmp/mfb-translations/<pr>.json
+# staging  (--no-tty is required: heroku run allocates a TTY by default, which breaks stdin piping)
+heroku run --no-tty -a cobenefits-api-staging "python manage.py add_translations - --dry-run" < /tmp/mfb-translations/<pr>.json
+heroku run --no-tty -a cobenefits-api-staging "python manage.py add_translations -" < /tmp/mfb-translations/<pr>.json
 
 # prod
-heroku run -a cobenefits-api "python manage.py add_translations - --dry-run" < /tmp/mfb-translations/<pr>.json
-heroku run -a cobenefits-api "python manage.py add_translations -" < /tmp/mfb-translations/<pr>.json
+heroku run --no-tty -a cobenefits-api "python manage.py add_translations - --dry-run" < /tmp/mfb-translations/<pr>.json
+heroku run --no-tty -a cobenefits-api "python manage.py add_translations -" < /tmp/mfb-translations/<pr>.json
 ```
 > `-` (or omitting the arg) makes the command read the JSON map from **stdin**, which is how
-> the map reaches a Heroku one-off dyno. Confirm `heroku run` supports stdin piping in the
-> user's setup; if not, fall back to a `heroku run bash` session and write the map to a temp
+> the map reaches a Heroku one-off dyno. `heroku run` allocates a TTY by default, which breaks
+> stdin piping — `--no-tty` (shown above) is required for the piped form. If piping still fails
+> in the user's setup, fall back to a `heroku run bash` session and write the map to a temp
 > file on the dyno (heredoc), then run against that path. Never commit the map into the repo.
 
 ## Workflow Phases
@@ -152,6 +153,8 @@ aborted, ask whether to continue with the remaining envs or stop.
 - **staging:** **CHECKPOINT 2** — confirm the staging dry-run looks correct, then run.
 - **prod:** **CHECKPOINT 3 (typed confirmation):**
   - Restate: target = prod (`cobenefits-api`), N new labels, M English changes, languages list.
+  - If the map contains any **pre-existing** labels, warn that the run will reset their
+    `active` / `no_auto` flags (a plain run reactivates inactivated labels) — see Safety.
   - Require the user to type the exact phrase: `apply to prod` (anything else aborts prod;
     ask whether to continue with any remaining envs).
   - Only then run the prod command.
@@ -181,8 +184,14 @@ translated records written across languages) before moving on.
 
 - **prod is gated behind a typed `apply to prod` confirmation.** No exceptions.
 - Staging and prod always get a dry-run first; never apply blind.
-- The command is idempotent — re-running after an interruption is safe and is the intended
-  recovery path. The temp map is regenerable from the code, so a lost temp file is not a problem.
+- The command is idempotent for *text* — re-running after an interruption safely backfills
+  English and missing-language rows, and is the intended recovery path. The temp map is
+  regenerable from the code, so a lost temp file is not a problem.
+- **Re-runs are NOT flag-safe.** `add_translations` rewrites `active` / `no_auto` on a
+  pre-existing label to match the run's options — a plain re-run (no `--inactive` / `--no-auto`)
+  sets `active=True`, silently reactivating a label someone deliberately deactivated in the
+  admin. When the map might contain already-live labels, prefer scoping it to genuinely new IDs,
+  and call this out at the prod checkpoint.
 - Never invent labels or English text; everything comes verbatim from the PR's code.
 - `co.energy.rewiring_america_link` and similar shared IDs are usually already in the DB —
   don't re-add unless explicitly asked.
@@ -194,8 +203,8 @@ translated records written across languages) before moving on.
 `add_translations` (in `benefits-api/translations/management/commands/add_translations.py`):
 - Reads `{label: english_text}` JSON from a file arg or **stdin** (`-` / no arg).
 - `--dry-run` — classify and print only; no writes, no API calls.
-- `--no-translate` — English rows only; does NOT defer to anything. Re-run the command
-  without the flag to fill the other languages.
+- `--no-translate` — adds English rows only; re-run without the flag to backfill the other
+  languages.
 - `--no-auto` — sets `no_auto=True` on the labels. Note this only protects translations that
   have *already been manually edited* (`edited=True`); a freshly-created label's blank
   non-English rows are still auto-filled on the same run. Do not rely on `--no-auto` to block
