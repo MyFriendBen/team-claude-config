@@ -66,8 +66,8 @@ heroku run -a cobenefits-api "python manage.py add_translations -" < /tmp/mfb-tr
 ```
 > `-` (or omitting the arg) makes the command read the JSON map from **stdin**, which is how
 > the map reaches a Heroku one-off dyno. Confirm `heroku run` supports stdin piping in the
-> user's setup; if not, fall back to a `heroku run bash` session and paste, or commit the
-> fixture to the data dir as a last resort.
+> user's setup; if not, fall back to a `heroku run bash` session and write the map to a temp
+> file on the dyno (heredoc), then run against that path. Never commit the map into the repo.
 
 ## Workflow Phases
 
