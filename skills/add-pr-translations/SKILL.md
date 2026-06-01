@@ -194,8 +194,15 @@ translated records written across languages) before moving on.
 `add_translations` (in `benefits-api/translations/management/commands/add_translations.py`):
 - Reads `{label: english_text}` JSON from a file arg or **stdin** (`-` / no arg).
 - `--dry-run` — classify and print only; no writes, no API calls.
-- `--no-translate` — English rows only; defer other languages to `bulk_translate`.
-- `--no-auto` / `--inactive` — pass-through flags to the Translation model.
+- `--no-translate` — English rows only; does NOT defer to anything. Re-run the command
+  without the flag to fill the other languages.
+- `--no-auto` — sets `no_auto=True` on the labels. Note this only protects translations that
+  have *already been manually edited* (`edited=True`); a freshly-created label's blank
+  non-English rows are still auto-filled on the same run. Do not rely on `--no-auto` to block
+  auto-translation of new labels — use `--no-translate` for that.
+- `--inactive` — creates the labels as inactive (`active=False`).
+- Related command: for importing a *pre-translated* full export (per-language text + flags),
+  use `bulk_add_translations` instead — it takes the export shape and does not auto-translate.
 - Auto-translate is **batched** (dedups identical English strings, one bulk Google Translate
   call set per unique text) — efficient for PRs introducing many strings.
 
