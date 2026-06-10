@@ -55,35 +55,7 @@ For each criterion, reason through the full screener field inventory below and r
 | `household_assets` | Total household assets in dollars |
 | `last_tax_filing_year` | Tax year most recently filed (currently unused in most calculators) |
 | `has_benefits` | Whether household has any current benefits (`"true"` / `"false"` / `"preferNotToAnswer"`) |
-| `has_snap` | Currently has SNAP |
-| `has_wic` | Currently has WIC |
-| `has_tanf` | Currently has TANF |
-| `has_ssi` | Currently has SSI |
-| `has_ssdi` | Currently has SSDI |
-| `has_medicaid` | Currently has Medicaid |
-| `has_aca` | Currently has ACA marketplace insurance |
-| `has_chp` | Currently has CHP+ / CHIP |
-| `has_nslp` | Currently has National School Lunch Program |
-| `has_head_start` | Currently has Head Start |
-| `has_early_head_start` | Currently has Early Head Start |
-| `has_csfp` | Currently has Commodity Supplemental Food Program |
-| `has_ccdf` | Currently has Child Care and Development Fund |
-| `has_section_8` | Currently has Section 8 housing voucher |
-| `has_pell_grant` | Currently has Pell Grant |
-| `has_nfp` | Currently has Nurse-Family Partnership |
-| `has_eitc` | Currently has federal EITC |
-| `has_ctc` | Currently has federal Child Tax Credit |
-| `has_lifeline` | Currently has Lifeline (phone/internet discount) |
-| `has_acp` | Currently has Affordable Connectivity Program |
-| `has_sunbucks` | Currently has Summer EBT / Sun Bucks |
-| `has_employer_hi` | Has employer health insurance |
-| `has_private_hi` | Has private health insurance |
-| `has_medicaid_hi` | Has Medicaid (alternate insurance flag) |
-| `has_medicare_hi` | Has Medicare |
-| `has_chp_hi` | Has CHP+ insurance |
-| `has_no_hi` | Has no health insurance |
-| `has_va` | Has VA health benefits |
-| *(state-specific `has_*` fields)* | See screener-fields-reference.md for the full list by state |
+| `current_benefits` | The household's current benefits, as a list of program `name_abbreviated` values (e.g. `["snap", "wa_tanf", "nslp"]`). In calculator code, read it via `screen.has_benefit("name_abbreviated")` / `screen.has_base_benefit("base_program")`. |
 | `needs_food` | Self-reported need: food |
 | `needs_baby_supplies` | Self-reported need: baby supplies |
 | `needs_housing_help` | Self-reported need: housing |
@@ -145,6 +117,8 @@ For each criterion, reason through the full screener field inventory below and r
 | `calc_expenses(frequency, types)` | Computed method — sums expenses by type and converts to requested frequency |
 
 **Insurance (per person)**
+
+Health insurance is collected per household member, not on the Screen. Read it in calculators via `member.insurance.has_insurance_types([...])` (e.g. `member.insurance.has_insurance_types(["none"])` for an uninsured member). There are no household-level insurance fields.
 
 | Field | What it captures |
 |---|---|
@@ -213,13 +187,14 @@ Apply these rules when recommending fields for each criterion:
 - `disability_medicaid` = specifically on Medicaid due to disability
 
 **Current enrollment (categorical eligibility)**
-- When a program grants automatic eligibility to recipients of another program, use the relevant `has_*` field on the Screen (e.g., `has_ssi`, `has_tanf`, `has_snap`).
-- When enrollment in a program disqualifies a person, use the same `has_*` field to filter them out.
+- Read current benefits via `screen.has_benefit("name_abbreviated")` (e.g. `screen.has_benefit("snap")`), which reads the `CurrentBenefit` join table.
+- When a program grants automatic eligibility to recipients of another program, check the relevant benefit with `has_benefit(...)`. To match *any* state variant of a benefit (e.g. `tanf` / `co_tanf` / `wa_tanf` / `ma_tafdc`), use `screen.has_base_benefit("tanf")`, which queries by `Program.base_program` instead of an exact name.
+- When enrollment in a program disqualifies a person, use the same `has_benefit(...)` / `has_base_benefit(...)` call to filter them out.
 
 **Housing**
 - Use `housing_situation` for general housing type.
 - Use `EnergyCalculatorScreen.is_home_owner` / `is_renter` for energy programs.
-- Use `has_section_8` if the criterion involves current housing voucher status.
+- Use `screen.has_benefit("section_8")` if the criterion involves current housing voucher status.
 
 **Children and family structure**
 - Child presence: count `HouseholdMember` records where `relationship` is `child`, `fosterChild`, or `grandChild` and age is within the program's definition of qualifying child.
@@ -305,7 +280,12 @@ List any fields cited in the original spec that do not exist in the screener mod
 
 #### Already-Has Check
 
-Identify the `has_*` field on the Screen that corresponds to this program (e.g., `has_snap` for SNAP). This field must be used to suppress the program from results for households that already have it. If no matching field exists, flag it so one can be added.
+A household can only declare it *already has* a program if that program's `show_in_has_benefits_step` flag is true (set in its `initial_config.json`) — that's the gate for whether it appears on the current-benefits step at all. Once a household has declared a benefit, that signal feeds exactly two places:
+
+1. **A *different* program's calculator** — to model presumed eligibility or ineligibility, via `screen.has_benefit("that_other_program")` / `has_base_benefit(...)` (e.g. "presumed eligible if they already receive SNAP").
+2. **The `already_has` results workflow** — to filter the **same** program out of results. This is automatic: `screener/views.py` sets the program's `already_has` flag from `screen.has_benefit(program.name_abbreviated)` and the frontend hides it. The calculator does **nothing** for this — never call `has_benefit()` on the calculator's own program name to suppress it.
+
+So in a calculator, `has_benefit()` is only ever for case 1 (checking *another* program), never case 2.
 
 ---
 

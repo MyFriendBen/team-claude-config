@@ -220,7 +220,7 @@ e.condition(assets < self.asset_limit, messages.assets(self.asset_limit))
 
 **Categorical eligibility — household-level (SNAP/TANF bypass):**
 
-SNAP and TANF are household-level benefits. If the household already has one of these, it bypasses the income test for everyone. Always use `self.screen.has_benefit()` (not direct boolean fields like `self.screen.has_snap`) because `has_benefit()` handles cross-state aliases correctly.
+SNAP and TANF are household-level benefits. If the household already has one of these, it bypasses the income test for everyone. Use `self.screen.has_benefit("snap")` / `self.screen.has_base_benefit("snap")` — these handle cross-state aliases correctly.
 
 ```python
 categorically_eligible = self.screen.has_benefit("snap") or self.screen.has_benefit("tanf")
@@ -235,7 +235,7 @@ else:
 
 **Categorical eligibility — member-level (SSI/Medicaid bypass):**
 
-SSI and Medicaid are individual-level — only the age-eligible member's own benefits count. For SSI, check the member's SSI income stream (not `screen.has_ssi`). For Medicaid, check the member's insurance.
+When a rule is *individual-level* — only the age-eligible member's **own** SSI/Medicaid should count — don't use a household-level check, which would also count another member's SSI/Medicaid. For SSI, check that member's own SSI income stream; for Medicaid, check that member's insurance. (A household-level `screen.has_benefit("ssi")` is still the right tool for the other kind of rule — "does *anyone* in the household receive SSI." Match the check to what the spec actually asks.)
 
 ```python
 for member_e in e.eligible_members:
@@ -289,7 +289,7 @@ e.condition(member.age is not None and member.age >= 65)
 e.condition(member.age is not None and self.min_age <= member.age <= self.max_age)
 ```
 
-**Checking existing benefits:** Always use `self.screen.has_benefit("program_name")` rather than accessing boolean fields directly (e.g. `self.screen.has_snap`). The `has_benefit()` method handles state-specific aliases and is the canonical way to check whether a household already receives a benefit.
+**Checking existing benefits:** Use `self.screen.has_benefit("program_name")` — it reads the `CurrentBenefit` join table, handles state-specific aliases, and is the canonical way to check whether a household already receives a benefit.
 
 **Tiered member_value based on age or income:**
 ```python
@@ -541,51 +541,30 @@ Run validations again. Verify and fix:
 - If any of the new program's validations are **failing** — fix the calculator and commit
 - If any **other** programs' validations are newly failing (compare to 5.3 baseline) — fix and commit
 
-## Phase 6: "Already Have" Checkbox (Conditional)
+## Phase 6: "Already Have" Screener Step (Conditional)
 
-> This phase is being deprecated once MFB-862 and MFB-720 ship. Only complete it if the program needs to appear in the "I already have this benefit" screener step — typically only for large federal/state programs (SNAP, TANF, Medicaid, etc.) or programs that confer automatic eligibility on other programs.
+Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's `initial_config.json` at import time. There is nothing else to wire up: no white-label config edit, no database/serializer/frontend changes. (A household's declared benefits are stored in the `CurrentBenefit` join table and read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
 
-Ask the user: "Does this program need an 'already have' checkbox on the screener? This is typically only for major programs like SNAP, TANF, or Medicaid."
+There is nothing to *build* here — only a decision to make and confirm in the config you're importing.
 
-If yes, proceed with these sub-steps. If no, skip to Phase 7.
+**The criterion is functional, not size-based.** A program belongs on this step only if knowing a household already receives it changes the eligibility result of *another* program — i.e. it confers categorical/presumed eligibility (or is a disqualifier) elsewhere. It does **not** have to be a "major" program; conversely, a large program that nothing else keys off of does not belong here. Don't guess from the program's prominence — verify:
 
-### 6.1 Add to white label category benefits
+1. **Does our code base already key off this benefit?** Grep the calculators for the program's `name_abbreviated` and its `base_program`:
+   ```bash
+   grep -rnE "has_benefit(_from_list)?\(|has_base_benefit\(|presumptive_eligibility|categorically_eligible" programs/programs/ \
+     | grep -vE "/tests/|test_" \
+     | grep -iE "<name_abbreviated>|<base_program>"
+   ```
+   A hit means another calculator reads this benefit's state (directly, via `has_base_benefit`, or through a `presumptive_eligibility` / `categorically_eligible` list) → it needs `show_in_has_benefits_step: true`. **But no hit is not proof it's unneeded** — the program is new, so nothing could have referenced it yet. Always also do check #2.
 
-Edit `configuration/white_labels/{state_code}.py` and add the program to the appropriate category in `category_benefits`. Use the canonical name (no state prefix) for programs that exist in multiple states.
+2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies that were somehow written ahead of it — usually none. This check looks for gaps: does receiving this new program categorically/presumptively qualify a household for one of our existing programs? Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (e.g. via `programs/programs/{state}/` and the program config). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
 
-### 6.2 Check for existing database field
+Then:
 
-Look for `has_{canonical_name}` in `screener/models.py`. If it exists, skip to 6.4.
+- If either check says yes, set `"show_in_has_benefits_step": true` (and `"active": true`) in the program's `initial_config.json`. The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields — nothing else to wire up.
+- Otherwise (the common case), leave `show_in_has_benefits_step: false` — skip to Phase 7.
 
-### 6.3 Add database field + migration (if new)
-
-Add `has_{name} = models.BooleanField(default=False, blank=True, null=True)` to the `Screen` model, then:
-```bash
-venv/bin/python manage.py makemigrations screener
-venv/bin/python manage.py migrate screener
-```
-
-Also add the mapping in the `has_benefit()` method in `screener/models.py`.
-
-### 6.4 Update serializer (if new field)
-
-Add the field to `ScreenSerializer` in `screener/serializers.py`.
-
-### 6.5 Frontend changes (if new field)
-
-Check if the canonical name already exists in the frontend (`FormData.ts`). If not, update these 5 files:
-1. `src/Types/FormData.ts` — add to `Benefits` type
-2. `src/Types/ApiFormData.ts` — add `has_{name}` to `ApiFormData`
-3. `src/Assets/updateScreen.ts` — map `formData.benefits.{name}` to API field
-4. `src/Assets/updateFormData.tsx` — map API response back to form data
-5. `src/Components/Wrapper/Wrapper.tsx` — initialize default value to `false`
-
-### 6.6 Commit
-
-```
-git add .
-git commit -m "Add {program} to 'already have' screener step"
-```
+If you change this flag in the config, re-run the program config import so the `Program` row reflects it.
 
 ## Phase 7: Summary
 
