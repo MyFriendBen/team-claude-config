@@ -233,7 +233,7 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
 }
 ```
 
-**Current benefits:** send the household's current benefits as `current_benefits`, a list of program `name_abbreviated` values (e.g. `["snap", "tanf", "wic"]`); use `[]` when the scenario household has no current benefits. The legacy per-benefit `has_snap` / `has_tanf` / … top-level fields are no longer accepted by the serializer (CB Step 6 / MFB-720) — sending them has no effect.
+**Current benefits:** send the household's current benefits as `current_benefits`, a list of program `name_abbreviated` values (e.g. `["snap", "tanf", "wic"]`); use `[]` when the scenario household has no current benefits.
 
 #### Field Mapping from Spec Scenarios
 

@@ -220,7 +220,7 @@ e.condition(assets < self.asset_limit, messages.assets(self.asset_limit))
 
 **Categorical eligibility — household-level (SNAP/TANF bypass):**
 
-SNAP and TANF are household-level benefits. If the household already has one of these, it bypasses the income test for everyone. Always use `self.screen.has_benefit()` (not direct boolean fields like `self.screen.has_snap`) because `has_benefit()` handles cross-state aliases correctly.
+SNAP and TANF are household-level benefits. If the household already has one of these, it bypasses the income test for everyone. Use `self.screen.has_benefit("snap")` / `self.screen.has_base_benefit("snap")` — these handle cross-state aliases correctly.
 
 ```python
 categorically_eligible = self.screen.has_benefit("snap") or self.screen.has_benefit("tanf")
@@ -235,7 +235,7 @@ else:
 
 **Categorical eligibility — member-level (SSI/Medicaid bypass):**
 
-SSI and Medicaid are individual-level — only the age-eligible member's own benefits count. For SSI, check the member's SSI income stream (not `screen.has_ssi`). For Medicaid, check the member's insurance.
+SSI and Medicaid are individual-level — only the age-eligible member's own benefits count. For SSI, check the member's own SSI income stream (a household-level current-benefit check would wrongly count another member's SSI). For Medicaid, check the member's insurance.
 
 ```python
 for member_e in e.eligible_members:
@@ -289,7 +289,7 @@ e.condition(member.age is not None and member.age >= 65)
 e.condition(member.age is not None and self.min_age <= member.age <= self.max_age)
 ```
 
-**Checking existing benefits:** Always use `self.screen.has_benefit("program_name")` rather than accessing boolean fields directly (e.g. `self.screen.has_snap`). The `has_benefit()` method handles state-specific aliases and is the canonical way to check whether a household already receives a benefit.
+**Checking existing benefits:** Use `self.screen.has_benefit("program_name")` — it reads the `CurrentBenefit` join table, handles state-specific aliases, and is the canonical way to check whether a household already receives a benefit.
 
 **Tiered member_value based on age or income:**
 ```python
@@ -543,7 +543,7 @@ Run validations again. Verify and fix:
 
 ## Phase 6: "Already Have" Screener Step (Conditional)
 
-Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's `initial_config.json` at import time. There is **no** white-label `category_benefits` edit, **no** `has_*` database column, **no** serializer field, and **no** frontend mapping to add. (The legacy per-benefit `has_*` columns are gone; current benefits live in the `CurrentBenefit` join table, read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
+Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's `initial_config.json` at import time. There is nothing else to wire up: no white-label config edit, no database/serializer/frontend changes. (A household's declared benefits are stored in the `CurrentBenefit` join table and read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
 
 There is nothing to *build* here — only a decision to make and confirm in the config you're importing.
 

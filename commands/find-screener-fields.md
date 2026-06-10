@@ -55,7 +55,7 @@ For each criterion, reason through the full screener field inventory below and r
 | `household_assets` | Total household assets in dollars |
 | `last_tax_filing_year` | Tax year most recently filed (currently unused in most calculators) |
 | `has_benefits` | Whether household has any current benefits (`"true"` / `"false"` / `"preferNotToAnswer"`) |
-| `current_benefits` | The household's current benefits, as a list of program `name_abbreviated` values (e.g. `["snap", "wa_tanf", "nslp"]`). **This is the authoritative current-benefits representation** — the legacy per-benefit `has_snap` / `has_tanf` / … Screen columns are no longer written or read (CB Step 6 / MFB-720). In calculator code, read it via `screen.has_benefit("name_abbreviated")` / `screen.has_base_benefit("base_program")`, never as raw columns. |
+| `current_benefits` | The household's current benefits, as a list of program `name_abbreviated` values (e.g. `["snap", "wa_tanf", "nslp"]`). In calculator code, read it via `screen.has_benefit("name_abbreviated")` / `screen.has_base_benefit("base_program")`. |
 | `has_employer_hi` | Has employer health insurance |
 | `has_private_hi` | Has private health insurance |
 | `has_medicaid_hi` | Has Medicaid (alternate insurance flag) |
@@ -193,7 +193,7 @@ Apply these rules when recommending fields for each criterion:
 - `disability_medicaid` = specifically on Medicaid due to disability
 
 **Current enrollment (categorical eligibility)**
-- Read current benefits via `screen.has_benefit("name_abbreviated")` (e.g. `screen.has_benefit("snap")`), **never** the legacy raw `has_*` columns — those are no longer written (CB Step 6 / MFB-720). `has_benefit()` reads the `CurrentBenefit` join table, the authoritative source.
+- Read current benefits via `screen.has_benefit("name_abbreviated")` (e.g. `screen.has_benefit("snap")`), which reads the `CurrentBenefit` join table.
 - When a program grants automatic eligibility to recipients of another program, check the relevant benefit with `has_benefit(...)`. To match *any* state variant of a benefit (e.g. `tanf` / `co_tanf` / `wa_tanf` / `ma_tafdc`), use `screen.has_base_benefit("tanf")`, which queries by `Program.base_program` instead of an exact name.
 - When enrollment in a program disqualifies a person, use the same `has_benefit(...)` / `has_base_benefit(...)` call to filter them out.
 
