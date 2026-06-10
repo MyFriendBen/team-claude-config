@@ -541,51 +541,17 @@ Run validations again. Verify and fix:
 - If any of the new program's validations are **failing** — fix the calculator and commit
 - If any **other** programs' validations are newly failing (compare to 5.3 baseline) — fix and commit
 
-## Phase 6: "Already Have" Checkbox (Conditional)
+## Phase 6: "Already Have" Screener Step (Conditional)
 
-> This phase is being deprecated once MFB-862 and MFB-720 ship. Only complete it if the program needs to appear in the "I already have this benefit" screener step — typically only for large federal/state programs (SNAP, TANF, Medicaid, etc.) or programs that confer automatic eligibility on other programs.
+Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's `initial_config.json` at import time. There is **no** white-label `category_benefits` edit, **no** `has_*` database column, **no** serializer field, and **no** frontend mapping to add. (The legacy per-benefit `has_*` columns are gone; current benefits live in the `CurrentBenefit` join table, read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
 
-Ask the user: "Does this program need an 'already have' checkbox on the screener? This is typically only for major programs like SNAP, TANF, or Medicaid."
+There is nothing to *build* here — only something to confirm in the config you're importing:
 
-If yes, proceed with these sub-steps. If no, skip to Phase 7.
+- Only major programs that confer categorical/presumed eligibility on *other* programs (SNAP, TANF, Medicaid, SSI, etc.) should appear on this step.
+- If the program is one of those, confirm its `initial_config.json` sets `"show_in_has_benefits_step": true` (and `"active": true`). The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields — nothing else to wire up.
+- Otherwise (the common case), `show_in_has_benefits_step` stays `false` and there's nothing to do — skip to Phase 7.
 
-### 6.1 Add to white label category benefits
-
-Edit `configuration/white_labels/{state_code}.py` and add the program to the appropriate category in `category_benefits`. Use the canonical name (no state prefix) for programs that exist in multiple states.
-
-### 6.2 Check for existing database field
-
-Look for `has_{canonical_name}` in `screener/models.py`. If it exists, skip to 6.4.
-
-### 6.3 Add database field + migration (if new)
-
-Add `has_{name} = models.BooleanField(default=False, blank=True, null=True)` to the `Screen` model, then:
-```bash
-venv/bin/python manage.py makemigrations screener
-venv/bin/python manage.py migrate screener
-```
-
-Also add the mapping in the `has_benefit()` method in `screener/models.py`.
-
-### 6.4 Update serializer (if new field)
-
-Add the field to `ScreenSerializer` in `screener/serializers.py`.
-
-### 6.5 Frontend changes (if new field)
-
-Check if the canonical name already exists in the frontend (`FormData.ts`). If not, update these 5 files:
-1. `src/Types/FormData.ts` — add to `Benefits` type
-2. `src/Types/ApiFormData.ts` — add `has_{name}` to `ApiFormData`
-3. `src/Assets/updateScreen.ts` — map `formData.benefits.{name}` to API field
-4. `src/Assets/updateFormData.tsx` — map API response back to form data
-5. `src/Components/Wrapper/Wrapper.tsx` — initialize default value to `false`
-
-### 6.6 Commit
-
-```
-git add .
-git commit -m "Add {program} to 'already have' screener step"
-```
+If you flip this flag in the config, re-run the program config import so the `Program` row reflects it.
 
 ## Phase 7: Summary
 
