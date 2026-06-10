@@ -545,13 +545,26 @@ Run validations again. Verify and fix:
 
 Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's `initial_config.json` at import time. There is **no** white-label `category_benefits` edit, **no** `has_*` database column, **no** serializer field, and **no** frontend mapping to add. (The legacy per-benefit `has_*` columns are gone; current benefits live in the `CurrentBenefit` join table, read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
 
-There is nothing to *build* here — only something to confirm in the config you're importing:
+There is nothing to *build* here — only a decision to make and confirm in the config you're importing.
 
-- Only major programs that confer categorical/presumed eligibility on *other* programs (SNAP, TANF, Medicaid, SSI, etc.) should appear on this step.
-- If the program is one of those, confirm its `initial_config.json` sets `"show_in_has_benefits_step": true` (and `"active": true`). The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields — nothing else to wire up.
-- Otherwise (the common case), `show_in_has_benefits_step` stays `false` and there's nothing to do — skip to Phase 7.
+**The criterion is functional, not size-based.** A program belongs on this step only if knowing a household already receives it changes the eligibility result of *another* program — i.e. it confers categorical/presumed eligibility (or is a disqualifier) elsewhere. It does **not** have to be a "major" program; conversely, a large program that nothing else keys off of does not belong here. Don't guess from the program's prominence — verify:
 
-If you flip this flag in the config, re-run the program config import so the `Program` row reflects it.
+1. **Does our code base already key off this benefit?** Grep the calculators for the program's `name_abbreviated` and its `base_program`:
+   ```bash
+   grep -rnE "has_benefit(_from_list)?\(|has_base_benefit\(|presumptive_eligibility|categorically_eligible" programs/programs/ \
+     | grep -vE "/tests/|test_" \
+     | grep -iE "<name_abbreviated>|<base_program>"
+   ```
+   A hit means another calculator reads this benefit's state (directly, via `has_base_benefit`, or through a `presumptive_eligibility` / `categorically_eligible` list) → it needs `show_in_has_benefits_step: true`. **But no hit is not proof it's unneeded** — the program is new, so nothing could have referenced it yet. Always also do check #2.
+
+2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies that were somehow written ahead of it — usually none. This check looks for gaps: does receiving this new program categorically/presumptively qualify a household for one of our existing programs? Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (e.g. via `programs/programs/{state}/` and the program config). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
+
+Then:
+
+- If either check says yes, set `"show_in_has_benefits_step": true` (and `"active": true`) in the program's `initial_config.json`. The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields — nothing else to wire up.
+- Otherwise (the common case), leave `show_in_has_benefits_step: false` — skip to Phase 7.
+
+If you change this flag in the config, re-run the program config import so the `Program` row reflects it.
 
 ## Phase 7: Summary
 
