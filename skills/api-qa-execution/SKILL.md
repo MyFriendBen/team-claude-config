@@ -296,20 +296,20 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
 
 **Current benefits mapping** (spec text → `current_benefits` list entry):
 
-Each current benefit the household receives is an entry in the `current_benefits` array, identified by the program's `name_abbreviated`. **Use the exact `name_abbreviated` that white label uses** — many are state-prefixed (e.g. `tx_snap`, `wa_ssi`, `ma_csfp`, `wa_apple_health_medicaid`), some are bare (e.g. `ssdi`). Don't assume which form a given benefit takes; look it up (see the note below). The names below are illustrative bare forms only:
+Each current benefit the household receives is an entry in the `current_benefits` array, identified by the program's `name_abbreviated`. **Use the exact `name_abbreviated` that white label uses** — for a given benefit it may be the bare name (e.g. `snap`) or state-prefixed (e.g. `{state}_snap`, like `tx_snap`), and some are neither (e.g. `wa_apple_health_medicaid` for Medicaid in WA). The form varies per white label and isn't predictable from the benefit type, so **don't assume — look it up** (see the note below). The table below lists the bare/canonical name as a starting point only; the real value is whatever that white label's `Program` row has.
 
-| Spec Text | Example `name_abbreviated` |
+| Spec Text | Canonical `name_abbreviated` (may be `{state}_`-prefixed per white label) |
 |---|---|
-| SNAP | `snap` / `tx_snap` / `wa_snap` |
-| TANF | `tanf` / `tx_tanf` / `wa_tanf` |
-| WIC | `wic` / `tx_wic` / `wa_wic` |
-| SSI | `ssi` / `tx_ssi` / `wa_ssi` |
+| SNAP | `snap` |
+| TANF | `tanf` |
+| WIC | `wic` |
+| SSI | `ssi` |
 | SSDI | `ssdi` |
-| Medicaid | `medicaid` / `wa_apple_health_medicaid` |
+| Medicaid | `medicaid` |
 | Section 8 | `section_8` |
-| CSFP | `csfp` / `tx_csfp` / `ma_csfp` |
-| ACA | `aca` / `tx_aca` |
-| EITC | `eitc` / `tx_eitc` / `wa_eitc` |
+| CSFP | `csfp` |
+| ACA | `aca` |
+| EITC | `eitc` |
 | None | `[]` (empty array) |
 
 **Note:** For the exact `name_abbreviated` a given white label uses, check the program's `initial_config.json` (`name_abbreviated` field) or query the `programs_program` table. The serializer resolves each entry against `(white_label, name_abbreviated)` and **silently drops** any name that white label has no `Program` for — so a typo or a name from the wrong white label just vanishes with no error. Any benefit the white label has a program for can be set here; it does not have to be one that renders as a visible tile on the current-benefits step.
