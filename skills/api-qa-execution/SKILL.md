@@ -229,14 +229,11 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
     }
   ],
   "expenses": [],
-  "has_tanf": false,
-  "has_wic": false,
-  "has_snap": false,
-  "has_ssi": false,
-  "has_ssdi": false,
-  "has_medicaid": false
+  "current_benefits": ["{program name_abbreviated for each benefit the scenario household currently receives, e.g. \"snap\", \"tanf\"}"]
 }
 ```
+
+**Current benefits:** send the household's current benefits as `current_benefits`, a list of program `name_abbreviated` values (e.g. `["snap", "tanf", "wic"]`); use `[]` when the scenario household has no current benefits. The legacy per-benefit `has_snap` / `has_tanf` / … top-level fields are no longer accepted by the serializer (CB Step 6 / MFB-720) — sending them has no effect.
 
 #### Field Mapping from Spec Scenarios
 
@@ -297,22 +294,25 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
 | CHP+ / CHIP | `chp` |
 | VA | `va` |
 
-**Current benefits mapping** (spec text → API field):
-| Spec Text | API Field |
-|---|---|
-| SNAP | `has_snap` |
-| TANF | `has_tanf` |
-| WIC | `has_wic` |
-| SSI | `has_ssi` |
-| SSDI | `has_ssdi` |
-| Medicaid | `has_medicaid` |
-| Section 8 | `has_section_8` |
-| CSFP | `has_csfp` |
-| ACA | `has_aca` |
-| EITC | `has_eitc` |
-| None | (all false) |
+**Current benefits mapping** (spec text → `current_benefits` list entry):
 
-**Note:** For any program not in this table, check `screener/models.py` — search for the `name_abbreviated` in the `current_benefits` property (e.g. `"wa_eitc": self.has_eitc`). The screener model maps each program name to its `has_*` boolean field.
+Each current benefit the household receives is an entry in the `current_benefits` array, identified by the program's `name_abbreviated`. Use the **state-specific** abbreviation when the white label offers one (e.g. WA → `wa_tanf`, `wa_snap`); the bare name otherwise.
+
+| Spec Text | `current_benefits` entry |
+|---|---|
+| SNAP | `"snap"` (or state variant, e.g. `"wa_snap"`) |
+| TANF | `"tanf"` (or state variant, e.g. `"wa_tanf"`) |
+| WIC | `"wic"` |
+| SSI | `"ssi"` |
+| SSDI | `"ssdi"` |
+| Medicaid | `"medicaid"` |
+| Section 8 | `"section_8"` |
+| CSFP | `"csfp"` |
+| ACA | `"aca"` |
+| EITC | `"eitc"` (or state variant, e.g. `"wa_eitc"`) |
+| None | `[]` |
+
+**Note:** For the exact `name_abbreviated` a given white label uses, check the program's `initial_config.json` (`name_abbreviated` field) or query the `programs_program` table. Only programs the current-benefits step renders for that white label can appear in `current_benefits`.
 
 **Expenses mapping** (spec text → expense object in `expenses` array):
 
@@ -435,7 +435,7 @@ If the scenario's `expected_estimated_value` is not null AND the eligibility res
 
 **Overall scenario result:** A scenario is **PASS** only if BOTH eligibility and value match pass (or value match is N/A). If either fails, the scenario is **FAIL**.
 
-**`already_has` note:** The API returns `eligible: true` alongside `already_has: true` when a household already has a benefit (e.g. `has_eitc: true`). The platform suppresses these on the frontend — they never appear as new results. Treat `already_has: true` as "Not eligible" for comparison purposes. For "Currently receiving" scenarios in the spec, this is the correct pass condition.
+**`already_has` note:** The API returns `eligible: true` alongside `already_has: true` when a household already has a benefit (i.e. the program's `name_abbreviated` is in the screen's `current_benefits`). The platform suppresses these on the frontend — they never appear as new results. Treat `already_has: true` as "Not eligible" for comparison purposes. For "Currently receiving" scenarios in the spec, this is the correct pass condition.
 
 #### Step 4: Record Result
 
