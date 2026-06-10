@@ -296,21 +296,21 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
 
 **Current benefits mapping** (spec text → `current_benefits` list entry):
 
-Each current benefit the household receives is an entry in the `current_benefits` array, identified by the program's `name_abbreviated`. Use the **state-specific** abbreviation when the white label offers one (e.g. WA → `wa_tanf`, `wa_snap`); the bare name otherwise.
+Each current benefit the household receives is an entry in the `current_benefits` array, identified by the program's `name_abbreviated`. **Use the exact `name_abbreviated` that white label uses** — many are state-prefixed (e.g. `tx_snap`, `wa_ssi`, `ma_csfp`, `wa_apple_health_medicaid`), some are bare (e.g. `ssdi`). Don't assume which form a given benefit takes; look it up (see the note below). The names below are illustrative bare forms only:
 
-| Spec Text | `current_benefits` entry |
+| Spec Text | Example `name_abbreviated` |
 |---|---|
-| SNAP | `"snap"` (or state variant, e.g. `"wa_snap"`) |
-| TANF | `"tanf"` (or state variant, e.g. `"wa_tanf"`) |
-| WIC | `"wic"` |
-| SSI | `"ssi"` |
-| SSDI | `"ssdi"` |
-| Medicaid | `"medicaid"` |
-| Section 8 | `"section_8"` |
-| CSFP | `"csfp"` |
-| ACA | `"aca"` |
-| EITC | `"eitc"` (or state variant, e.g. `"wa_eitc"`) |
-| None | `[]` |
+| SNAP | `snap` / `tx_snap` / `wa_snap` |
+| TANF | `tanf` / `tx_tanf` / `wa_tanf` |
+| WIC | `wic` / `tx_wic` / `wa_wic` |
+| SSI | `ssi` / `tx_ssi` / `wa_ssi` |
+| SSDI | `ssdi` |
+| Medicaid | `medicaid` / `wa_apple_health_medicaid` |
+| Section 8 | `section_8` |
+| CSFP | `csfp` / `tx_csfp` / `ma_csfp` |
+| ACA | `aca` / `tx_aca` |
+| EITC | `eitc` / `tx_eitc` / `wa_eitc` |
+| None | `[]` (empty array) |
 
 **Note:** For the exact `name_abbreviated` a given white label uses, check the program's `initial_config.json` (`name_abbreviated` field) or query the `programs_program` table. The serializer resolves each entry against `(white_label, name_abbreviated)` and **silently drops** any name that white label has no `Program` for — so a typo or a name from the wrong white label just vanishes with no error. Any benefit the white label has a program for can be set here; it does not have to be one that renders as a visible tile on the current-benefits step.
 
