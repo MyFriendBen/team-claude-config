@@ -235,7 +235,7 @@ else:
 
 **Categorical eligibility — member-level (SSI/Medicaid bypass):**
 
-SSI and Medicaid are individual-level — only the age-eligible member's own benefits count. For SSI, check the member's own SSI income stream (a household-level current-benefit check would wrongly count another member's SSI). For Medicaid, check the member's insurance.
+When a rule is *individual-level* — only the age-eligible member's **own** SSI/Medicaid should count — don't use a household-level check, which would also count another member's SSI/Medicaid. For SSI, check that member's own SSI income stream; for Medicaid, check that member's insurance. (A household-level `screen.has_benefit("ssi")` is still the right tool for the other kind of rule — "does *anyone* in the household receive SSI." Match the check to what the spec actually asks.)
 
 ```python
 for member_e in e.eligible_members:
