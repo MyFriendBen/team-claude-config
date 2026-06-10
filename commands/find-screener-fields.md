@@ -56,14 +56,6 @@ For each criterion, reason through the full screener field inventory below and r
 | `last_tax_filing_year` | Tax year most recently filed (currently unused in most calculators) |
 | `has_benefits` | Whether household has any current benefits (`"true"` / `"false"` / `"preferNotToAnswer"`) |
 | `current_benefits` | The household's current benefits, as a list of program `name_abbreviated` values (e.g. `["snap", "wa_tanf", "nslp"]`). In calculator code, read it via `screen.has_benefit("name_abbreviated")` / `screen.has_base_benefit("base_program")`. |
-| `has_employer_hi` | Has employer health insurance |
-| `has_private_hi` | Has private health insurance |
-| `has_medicaid_hi` | Has Medicaid (alternate insurance flag) |
-| `has_medicare_hi` | Has Medicare |
-| `has_chp_hi` | Has CHP+ insurance |
-| `has_no_hi` | Has no health insurance |
-| `has_va` | Has VA health benefits |
-| *(state-specific `has_*` fields)* | See screener-fields-reference.md for the full list by state |
 | `needs_food` | Self-reported need: food |
 | `needs_baby_supplies` | Self-reported need: baby supplies |
 | `needs_housing_help` | Self-reported need: housing |
@@ -125,6 +117,8 @@ For each criterion, reason through the full screener field inventory below and r
 | `calc_expenses(frequency, types)` | Computed method — sums expenses by type and converts to requested frequency |
 
 **Insurance (per person)**
+
+Health insurance is collected per household member, not on the Screen. Read it in calculators via `member.insurance.has_insurance_types([...])` (e.g. `member.insurance.has_insurance_types(["none"])` for an uninsured member). There are no household-level insurance fields.
 
 | Field | What it captures |
 |---|---|
