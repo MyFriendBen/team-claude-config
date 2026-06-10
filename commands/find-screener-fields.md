@@ -286,7 +286,9 @@ List any fields cited in the original spec that do not exist in the screener mod
 
 #### Already-Has Check
 
-Already-has suppression is handled **centrally** by the results layer, not in the calculator — `screener/views.py` sets each program's `already_has` flag from `screen.has_benefit(program.name_abbreviated)`, and the frontend filters those out. A calculator should **not** add its own guard against its own program name. Whether a household can declare this benefit on the current-benefits step is governed by the program's `show_in_has_benefits_step` flag (set in its `initial_config.json`), not by anything in the calculator — so there is nothing to add here. If a categorical-eligibility rule depends on a benefit that no program currently exposes on that step, flag it.
+When a household marks that they *already have* the program being calculated, that is applied **automatically** when results are generated — `screener/views.py` sets the program's `already_has` flag from `screen.has_benefit(program.name_abbreviated)` and the frontend filters it out. The calculator does nothing for this: do **not** call `has_benefit()` on the calculator's own program name to suppress it. (Calling `has_benefit()` is only for *cross-program* logic — e.g. "ineligible if they already receive SNAP" — never for the program's own already-has suppression.)
+
+This is separate from whether the program can be *selected* as "I already have this" on the current-benefits step, which is governed by the program's `show_in_has_benefits_step` flag (set in its `initial_config.json`) — not by anything in the calculator.
 
 ---
 
