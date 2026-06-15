@@ -247,6 +247,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Add description explaining what and why
 - Link to Linear ticket if applicable
 - Address CodeRabbit feedback systematically
+- **Use the canonical PR body template** at [`docs/PR_TEMPLATE.md`](./PR_TEMPLATE.md). This is the single source of truth — skills that open PRs (`add-custom-program`, `add-pe-program`, …) read from it, so update that one file rather than duplicating the structure.
 
 ## Claude Code Best Practices
 

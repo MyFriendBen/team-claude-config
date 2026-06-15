@@ -1,0 +1,61 @@
+{
+  "$comment": "Mapping between source SKILL.md files (source of truth) and the Outline docs that must stay in parity with them. Supports many-to-one: several skills can inform a single Outline doc. Source paths are relative to the skills root (team-claude-config/skills). Only docs with a non-empty 'sources' list are audited or updated. Subtree below: the 'To Do' doc and its nested children in the 'Program Implementation' collection. 'Importing Program Config' and 'Running Validations' are intentionally omitted until matching skills exist.",
+  "documents": [
+    {
+      "outline_id": "291b1c49-6fa0-4b5d-ba14-8dcb3a1db5f7",
+      "outline_title": "To Do",
+      "combination_strategy": "sectioned",
+      "section_separator": "---",
+      "sources": [
+        { "path": "add-custom-program/SKILL.md", "heading": "Implement a Custom Calculator" },
+        { "path": "add-pe-program/SKILL.md", "heading": "Implement a PolicyEngine Calculator" },
+        { "path": "api-qa-execution/SKILL.md", "heading": "API QA Execution" },
+        { "path": "playwright-qa-execution/SKILL.md", "heading": "Playwright QA Execution" }
+      ]
+    },
+    {
+      "outline_id": "68a51c5e-dbf2-4be0-b4b1-b1af37a1cd16",
+      "outline_title": "1. Use Claude for Implementation",
+      "combination_strategy": "sectioned",
+      "section_separator": "---",
+      "sources": [
+        { "path": "add-custom-program/SKILL.md", "heading": "Custom Calculator" },
+        { "path": "add-pe-program/SKILL.md", "heading": "PolicyEngine Calculator" }
+      ]
+    },
+    {
+      "outline_id": "281751da-876a-43d0-ac6f-367abe908999",
+      "outline_title": "a. Implementing Custom Calculator Program",
+      "combination_strategy": "concat",
+      "sources": [
+        { "path": "add-custom-program/SKILL.md" }
+      ]
+    },
+    {
+      "outline_id": "0d04501c-a0fa-434b-9d3e-3b5f0e3cf6ff",
+      "outline_title": "b. Implementing PolicyEngine Calculator",
+      "combination_strategy": "concat",
+      "sources": [
+        { "path": "add-pe-program/SKILL.md" }
+      ]
+    },
+    {
+      "outline_id": "20714d82-8859-42c4-983e-89b5ccd671fb",
+      "outline_title": "4. API and/or Playwright Scenario Tests",
+      "combination_strategy": "sectioned",
+      "section_separator": "---",
+      "sources": [
+        { "path": "api-qa-execution/SKILL.md", "heading": "API QA Execution" },
+        { "path": "playwright-qa-execution/SKILL.md", "heading": "Playwright QA Execution" }
+      ]
+    },
+    {
+      "outline_id": "9ed96707-a58e-48b4-9164-712a55250c21",
+      "outline_title": "Running Playwright Tests with Claude",
+      "combination_strategy": "concat",
+      "sources": [
+        { "path": "playwright-qa-execution/SKILL.md" }
+      ]
+    }
+  ]
+}

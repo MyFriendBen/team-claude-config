@@ -543,51 +543,55 @@ Run validations again. Verify and fix:
 
 ## Phase 6: "Already Have" Checkbox (Conditional)
 
-> This phase is being deprecated once MFB-862 and MFB-720 ship. Only complete it if the program needs to appear in the "I already have this benefit" screener step — typically only for large federal/state programs (SNAP, TANF, Medicaid, etc.) or programs that confer automatic eligibility on other programs.
+> Only complete this phase if the program belongs on the "I already have this benefit" screener step. The rule: if participation in this program explicitly informs eligibility for *another* program — through presumptive eligibility or disqualification — it belongs on the step. Otherwise it doesn't.
 
-Ask the user: "Does this program need an 'already have' checkbox on the screener? This is typically only for major programs like SNAP, TANF, or Medicaid."
+Ask the user: "Does participation in this program inform eligibility for another program, through presumptive eligibility or disqualification? If yes, it belongs on the 'already have' step; if not, it doesn't."
 
-If yes, proceed with these sub-steps. If no, skip to Phase 7.
+If yes, proceed. If no, skip to Phase 7.
 
-### 6.1 Add to white label category benefits
+### How this works now (post MFB-862 / MFB-720)
 
-Edit `configuration/white_labels/{state_code}.py` and add the program to the appropriate category in `category_benefits`. Use the canonical name (no state prefix) for programs that exist in multiple states.
+The current-benefits step is driven entirely by two fields on the `Program` model — there is **no longer** a `category_benefits` config, a per-program `has_{name}` column, a serializer `has_*` field, or any frontend wiring to add:
 
-### 6.2 Check for existing database field
+- The screener step fetches `GET /api/screener-options/<wl>/has-benefits-programs/`, which returns every program with `show_in_has_benefits_step=True` **and** `active=True` for that white label (`screener/views.py`).
+- The serializer reads/writes the selection as `current_benefits: [name_abbreviated, ...]` (`screener/serializers.py`); the frontend stores it as a `Set<string>` of `name_abbreviated` values and renders the tile list straight from the API. No `has_*` fields are involved anywhere.
 
-Look for `has_{canonical_name}` in `screener/models.py`. If it exists, skip to 6.4.
+> The old `category_benefits` blocks still physically sit in `configuration/white_labels/*.py`, but they are orphaned legacy config — nothing reads them. Do **not** add the program there.
 
-### 6.3 Add database field + migration (if new)
+### 6.1 Set `show_in_has_benefits_step` on the Program
 
-Add `has_{name} = models.BooleanField(default=False, blank=True, null=True)` to the `Screen` model, then:
+Set `show_in_has_benefits_step=True` on the program (and confirm `active=True`). The program's `name_abbreviated` is the key the screener uses — no migration, serializer, or frontend change is required.
+
+Do this in the program's initial config / fixture if it's defined there, otherwise via the Program record. Verify it surfaces:
 ```bash
-venv/bin/python manage.py makemigrations screener
-venv/bin/python manage.py migrate screener
+venv/bin/python manage.py shell -c "from programs.models import Program; print(Program.objects.filter(show_in_has_benefits_step=True, active=True, white_label__code='{state_code}').values_list('name_abbreviated', flat=True))"
 ```
 
-Also add the mapping in the `has_benefit()` method in `screener/models.py`.
+### 6.2 Commit
 
-### 6.4 Update serializer (if new field)
-
-Add the field to `ScreenSerializer` in `screener/serializers.py`.
-
-### 6.5 Frontend changes (if new field)
-
-Check if the canonical name already exists in the frontend (`FormData.ts`). If not, update these 5 files:
-1. `src/Types/FormData.ts` — add to `Benefits` type
-2. `src/Types/ApiFormData.ts` — add `has_{name}` to `ApiFormData`
-3. `src/Assets/updateScreen.ts` — map `formData.benefits.{name}` to API field
-4. `src/Assets/updateFormData.tsx` — map API response back to form data
-5. `src/Components/Wrapper/Wrapper.tsx` — initialize default value to `false`
-
-### 6.6 Commit
-
+Stage the specific files you touched (not `git add .`/`-A`):
 ```
-git add .
-git commit -m "Add {program} to 'already have' screener step"
+git commit -m "Show {program} in 'already have' screener step (show_in_has_benefits_step)"
 ```
 
-## Phase 7: Summary
+## Phase 7: Open a PR
+
+Opening the PR is part of this workflow — always complete this phase.
+
+1. Read the canonical PR body template at `team-claude-config/docs/PR_TEMPLATE.md` and fill it in (this is the single source of truth — do not hand-roll a different structure).
+2. Create the PR:
+   ```bash
+   gh pr create \
+     --title "Add {State} {Program} ({state_abbrev})" \
+     --body "$(cat <<'EOF'
+   {contents of PR_TEMPLATE.md, filled in}
+   EOF
+   )" \
+     --assignee @me
+   ```
+3. Include a link to the Linear ticket in the PR body (under **Context & Motivation**) when the program came from a ticket.
+
+## Phase 8: Summary
 
 Summarize what was implemented:
 - Files created/modified
@@ -595,7 +599,6 @@ Summarize what was implemented:
 - Any data gaps or assumptions called out in the spec
 
 Suggest next steps:
-1. Review the code changes and address any issues
+1. Review the code changes and address any CodeRabbit feedback
 2. Run the full test suite to check for regressions
 3. Run `/playwright-qa-execution` locally to QA the program end-to-end
-4. Open a PR when ready
