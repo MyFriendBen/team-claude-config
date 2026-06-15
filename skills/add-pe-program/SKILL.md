@@ -206,7 +206,32 @@ git commit -m "Show {program} in 'already have' screener step (show_in_has_benef
 
 ## Phase 7: Open a PR
 
-Opening the PR is part of this workflow — always complete this phase.
+
+## Phase 5: "Already Have" Screener Step (Conditional)
+
+Decide whether this program should appear as a tile on the "I already have this benefit" screener step. This is driven entirely by the `Program` row's `show_in_has_benefits_step` flag, set from the program's `initial_config.json` at import time — there is **no** white-label `category_benefits` edit, **no** `has_*` column/serializer/frontend work. (Current benefits live in the `CurrentBenefit` join table, read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
+
+**The criterion is functional, not size-based.** A program belongs on this step only if knowing a household already receives it changes the eligibility result of *another* program — i.e. it confers categorical/presumed eligibility (or is a disqualifier) elsewhere. It does **not** have to be a "major" program; a large program nothing else keys off of doesn't belong here. Don't guess from prominence — verify:
+
+1. **Does our code base already key off this benefit?** Grep the calculators for the program's `name_abbreviated` and its `base_program`:
+   ```bash
+   grep -rnE "has_benefit(_from_list)?\(|has_base_benefit\(|presumptive_eligibility|categorically_eligible" programs/programs/ \
+     | grep -vE "/tests/|test_" \
+     | grep -iE "<name_abbreviated>|<base_program>"
+   ```
+   A hit means another calculator reads this benefit's state → it needs `show_in_has_benefits_step: true`. **But no hit is not proof it's unneeded** — the program is new, so nothing could have referenced it yet. Always also do check #2.
+
+2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies written ahead of it — usually none. Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (`programs/programs/{state}/` and the program config). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
+
+Then:
+
+- If either check says yes, set `"show_in_has_benefits_step": true` (and `"active": true`) in the program's `initial_config.json` and re-run the program config import so the `Program` row reflects it. The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields.
+- Otherwise (the common case), leave `show_in_has_benefits_step: false` and move on.
+
+## Phase 6: Open a PR
+
+  Opening the PR is part of this workflow — always complete this phase.
+
 
 1. Read the canonical PR body template at `team-claude-config/docs/PR_TEMPLATE.md` and fill it in (this is the single source of truth — do not hand-roll a different structure).
 2. Create the PR:
@@ -223,6 +248,7 @@ Opening the PR is part of this workflow — always complete this phase.
 
 ## Phase 8: Comment QA Scenarios on Linear Ticket
 
+
 1. Read `benefits-api/programs/programs/{state}/{program}/spec.md`
 2. Extract the **Test Scenarios** section verbatim — everything from the `## Test Scenarios` heading to the end of the file (or the next top-level `##` heading, whichever comes first)
 3. Post it as a comment on the Linear ticket:
@@ -232,6 +258,7 @@ Opening the PR is part of this workflow — always complete this phase.
    The comment body must be the extracted markdown exactly as written — no reformatting, no summarizing.
 
 ## Phase 9: Summary and Next Steps
+
 
 Summarize the changes you made (files created, test results, PR link).
 

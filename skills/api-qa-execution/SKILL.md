@@ -229,14 +229,11 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
     }
   ],
   "expenses": [],
-  "has_tanf": false,
-  "has_wic": false,
-  "has_snap": false,
-  "has_ssi": false,
-  "has_ssdi": false,
-  "has_medicaid": false
+  "current_benefits": ["{program name_abbreviated for each benefit the scenario household currently receives, e.g. \"snap\", \"tanf\"}"]
 }
 ```
+
+**Current benefits:** send the household's current benefits as `current_benefits`, a list of program `name_abbreviated` values (e.g. `["snap", "tanf", "wic"]`); use `[]` when the scenario household has no current benefits.
 
 #### Field Mapping from Spec Scenarios
 
@@ -297,22 +294,25 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
 | CHP+ / CHIP | `chp` |
 | VA | `va` |
 
-**Current benefits mapping** (spec text → API field):
-| Spec Text | API Field |
-|---|---|
-| SNAP | `has_snap` |
-| TANF | `has_tanf` |
-| WIC | `has_wic` |
-| SSI | `has_ssi` |
-| SSDI | `has_ssdi` |
-| Medicaid | `has_medicaid` |
-| Section 8 | `has_section_8` |
-| CSFP | `has_csfp` |
-| ACA | `has_aca` |
-| EITC | `has_eitc` |
-| None | (all false) |
+**Current benefits mapping** (spec text → `current_benefits` list entry):
 
-**Note:** For any program not in this table, check `screener/models.py` — search for the `name_abbreviated` in the `current_benefits` property (e.g. `"wa_eitc": self.has_eitc`). The screener model maps each program name to its `has_*` boolean field.
+Each current benefit the household receives is an entry in the `current_benefits` array, identified by the program's `name_abbreviated`. **Use the exact `name_abbreviated` that white label uses** — for a given benefit it may be the bare name (e.g. `snap`) or state-prefixed (e.g. `{state}_snap`, like `tx_snap`), and some are neither (e.g. `wa_apple_health_medicaid` for Medicaid in WA). The form varies per white label and isn't predictable from the benefit type, so **don't assume — look it up** (see the note below). The table below lists the bare/canonical name as a starting point only; the real value is whatever that white label's `Program` row has.
+
+| Spec Text | Canonical `name_abbreviated` (may be `{state}_`-prefixed per white label) |
+|---|---|
+| SNAP | `snap` |
+| TANF | `tanf` |
+| WIC | `wic` |
+| SSI | `ssi` |
+| SSDI | `ssdi` |
+| Medicaid | `medicaid` |
+| Section 8 | `section_8` |
+| CSFP | `csfp` |
+| ACA | `aca` |
+| EITC | `eitc` |
+| None | `[]` (empty array) |
+
+**Note:** For the exact `name_abbreviated` a given white label uses, check the program's `initial_config.json` (`name_abbreviated` field) or query the `programs_program` table. The serializer resolves each entry against `(white_label, name_abbreviated)` and **silently drops** any name that white label has no `Program` for — so a typo or a name from the wrong white label just vanishes with no error. Any benefit the white label has a program for can be set here; it does not have to be one that renders as a visible tile on the current-benefits step.
 
 **Expenses mapping** (spec text → expense object in `expenses` array):
 
@@ -435,7 +435,7 @@ If the scenario's `expected_estimated_value` is not null AND the eligibility res
 
 **Overall scenario result:** A scenario is **PASS** only if BOTH eligibility and value match pass (or value match is N/A). If either fails, the scenario is **FAIL**.
 
-**`already_has` note:** The API returns `eligible: true` alongside `already_has: true` when a household already has a benefit (e.g. `has_eitc: true`). The platform suppresses these on the frontend — they never appear as new results. Treat `already_has: true` as "Not eligible" for comparison purposes. For "Currently receiving" scenarios in the spec, this is the correct pass condition.
+**`already_has` note:** The API returns `eligible: true` alongside `already_has: true` when a household already has a benefit (i.e. the program's `name_abbreviated` is in the screen's `current_benefits`). The platform suppresses these on the frontend — they never appear as new results. Treat `already_has: true` as "Not eligible" for comparison purposes. For "Currently receiving" scenarios in the spec, this is the correct pass condition.
 
 #### Step 4: Record Result
 

@@ -220,7 +220,7 @@ e.condition(assets < self.asset_limit, messages.assets(self.asset_limit))
 
 **Categorical eligibility — household-level (SNAP/TANF bypass):**
 
-SNAP and TANF are household-level benefits. If the household already has one of these, it bypasses the income test for everyone. Always use `self.screen.has_benefit()` (not direct boolean fields like `self.screen.has_snap`) because `has_benefit()` handles cross-state aliases correctly.
+SNAP and TANF are household-level benefits. If the household already has one of these, it bypasses the income test for everyone. Use `self.screen.has_benefit("snap")` / `self.screen.has_base_benefit("snap")` — these handle cross-state aliases correctly.
 
 ```python
 categorically_eligible = self.screen.has_benefit("snap") or self.screen.has_benefit("tanf")
@@ -235,7 +235,7 @@ else:
 
 **Categorical eligibility — member-level (SSI/Medicaid bypass):**
 
-SSI and Medicaid are individual-level — only the age-eligible member's own benefits count. For SSI, check the member's SSI income stream (not `screen.has_ssi`). For Medicaid, check the member's insurance.
+When a rule is *individual-level* — only the age-eligible member's **own** SSI/Medicaid should count — don't use a household-level check, which would also count another member's SSI/Medicaid. For SSI, check that member's own SSI income stream; for Medicaid, check that member's insurance. (A household-level `screen.has_benefit("ssi")` is still the right tool for the other kind of rule — "does *anyone* in the household receive SSI." Match the check to what the spec actually asks.)
 
 ```python
 for member_e in e.eligible_members:
@@ -289,7 +289,7 @@ e.condition(member.age is not None and member.age >= 65)
 e.condition(member.age is not None and self.min_age <= member.age <= self.max_age)
 ```
 
-**Checking existing benefits:** Always use `self.screen.has_benefit("program_name")` rather than accessing boolean fields directly (e.g. `self.screen.has_snap`). The `has_benefit()` method handles state-specific aliases and is the canonical way to check whether a household already receives a benefit.
+**Checking existing benefits:** Use `self.screen.has_benefit("program_name")` — it reads the `CurrentBenefit` join table, handles state-specific aliases, and is the canonical way to check whether a household already receives a benefit.
 
 **Tiered member_value based on age or income:**
 ```python
@@ -541,55 +541,32 @@ Run validations again. Verify and fix:
 - If any of the new program's validations are **failing** — fix the calculator and commit
 - If any **other** programs' validations are newly failing (compare to 5.3 baseline) — fix and commit
 
-## Phase 6: "Already Have" Checkbox (Conditional)
+## Phase 6: "Already Have" Screener Step (Conditional)
 
-> Only complete this phase if the program belongs on the "I already have this benefit" screener step. The rule: if participation in this program explicitly informs eligibility for *another* program — through presumptive eligibility or disqualification — it belongs on the step. Otherwise it doesn't.
 
-Ask the user: "Does participation in this program inform eligibility for another program, through presumptive eligibility or disqualification? If yes, it belongs on the 'already have' step; if not, it doesn't."
+Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's `initial_config.json` at import time. There is nothing else to wire up: no white-label config edit, no database/serializer/frontend changes. (A household's declared benefits are stored in the `CurrentBenefit` join table and read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
 
-If yes, proceed. If no, skip to Phase 7.
+There is nothing to *build* here — only a decision to make and confirm in the config you're importing.
 
-### How this works now (post MFB-862 / MFB-720)
+**The criterion is functional, not size-based.** A program belongs on this step only if knowing a household already receives it changes the eligibility result of *another* program — i.e. it confers categorical/presumed eligibility (or is a disqualifier) elsewhere. It does **not** have to be a "major" program; conversely, a large program that nothing else keys off of does not belong here. Don't guess from the program's prominence — verify:
 
-The current-benefits step is driven entirely by two fields on the `Program` model — there is **no longer** a `category_benefits` config, a per-program `has_{name}` column, a serializer `has_*` field, or any frontend wiring to add:
-
-- The screener step fetches `GET /api/screener-options/<wl>/has-benefits-programs/`, which returns every program with `show_in_has_benefits_step=True` **and** `active=True` for that white label (`screener/views.py`).
-- The serializer reads/writes the selection as `current_benefits: [name_abbreviated, ...]` (`screener/serializers.py`); the frontend stores it as a `Set<string>` of `name_abbreviated` values and renders the tile list straight from the API. No `has_*` fields are involved anywhere.
-
-> The old `category_benefits` blocks still physically sit in `configuration/white_labels/*.py`, but they are orphaned legacy config — nothing reads them. Do **not** add the program there.
-
-### 6.1 Set `show_in_has_benefits_step` on the Program
-
-Set `show_in_has_benefits_step=True` on the program (and confirm `active=True`). The program's `name_abbreviated` is the key the screener uses — no migration, serializer, or frontend change is required.
-
-Do this in the program's initial config / fixture if it's defined there, otherwise via the Program record. Verify it surfaces:
-```bash
-venv/bin/python manage.py shell -c "from programs.models import Program; print(Program.objects.filter(show_in_has_benefits_step=True, active=True, white_label__code='{state_code}').values_list('name_abbreviated', flat=True))"
-```
-
-### 6.2 Commit
-
-Stage the specific files you touched (not `git add .`/`-A`):
-```
-git commit -m "Show {program} in 'already have' screener step (show_in_has_benefits_step)"
-```
-
-## Phase 7: Open a PR
-
-Opening the PR is part of this workflow — always complete this phase.
-
-1. Read the canonical PR body template at `team-claude-config/docs/PR_TEMPLATE.md` and fill it in (this is the single source of truth — do not hand-roll a different structure).
-2. Create the PR:
+1. **Does our code base already key off this benefit?** Grep the calculators for the program's `name_abbreviated` and its `base_program`:
    ```bash
-   gh pr create \
-     --title "Add {State} {Program} ({state_abbrev})" \
-     --body "$(cat <<'EOF'
-   {contents of PR_TEMPLATE.md, filled in}
-   EOF
-   )" \
-     --assignee @me
+   grep -rnE "has_benefit(_from_list)?\(|has_base_benefit\(|presumptive_eligibility|categorically_eligible" programs/programs/ \
+     | grep -vE "/tests/|test_" \
+     | grep -iE "<name_abbreviated>|<base_program>"
    ```
-3. Include a link to the Linear ticket in the PR body (under **Context & Motivation**) when the program came from a ticket.
+   A hit means another calculator reads this benefit's state (directly, via `has_base_benefit`, or through a `presumptive_eligibility` / `categorically_eligible` list) → it needs `show_in_has_benefits_step: true`. **But no hit is not proof it's unneeded** — the program is new, so nothing could have referenced it yet. Always also do check #2.
+
+2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies that were somehow written ahead of it — usually none. This check looks for gaps: does receiving this new program categorically/presumptively qualify a household for one of our existing programs? Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (e.g. via `programs/programs/{state}/` and the program config). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
+
+Then:
+
+- If either check says yes, set `"show_in_has_benefits_step": true` (and `"active": true`) in the program's `initial_config.json`. The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields — nothing else to wire up.
+- Otherwise (the common case), leave `show_in_has_benefits_step: false` — skip to Phase 7.
+
+If you change this flag in the config, re-run the program config import so the `Program` row reflects it.
+
 
 ## Phase 8: Summary
 
