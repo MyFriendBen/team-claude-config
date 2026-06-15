@@ -543,7 +543,6 @@ Run validations again. Verify and fix:
 
 ## Phase 6: "Already Have" Screener Step (Conditional)
 
-
 Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's `initial_config.json` at import time. There is nothing else to wire up: no white-label config edit, no database/serializer/frontend changes. (A household's declared benefits are stored in the `CurrentBenefit` join table and read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
 
 There is nothing to *build* here — only a decision to make and confirm in the config you're importing.
@@ -567,8 +566,7 @@ Then:
 
 If you change this flag in the config, re-run the program config import so the `Program` row reflects it.
 
-
-## Phase 8: Summary
+## Phase 7: Summary
 
 Summarize what was implemented:
 - Files created/modified
@@ -576,6 +574,7 @@ Summarize what was implemented:
 - Any data gaps or assumptions called out in the spec
 
 Suggest next steps:
-1. Review the code changes and address any CodeRabbit feedback
+1. Review the code changes and address any issues
 2. Run the full test suite to check for regressions
 3. Run `/playwright-qa-execution` locally to QA the program end-to-end
+4. Open a PR when ready
