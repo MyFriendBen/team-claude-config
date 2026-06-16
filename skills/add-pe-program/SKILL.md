@@ -1,6 +1,6 @@
 ---
 name: add-pe-program
-description: Implements a new PolicyEngine-based benefit program from a Linear ticket into benefits-api — research files, program class, dependency tests, validation, and PR.
+description: Implements a new PolicyEngine-based benefit program into benefits-api from a Linear ticket or local research files — research files, program class, dependency tests, validation, and PR.
 usage: /add-pe-program <ticket-id>
 example: /add-pe-program MFB-1234
 ---
@@ -11,7 +11,16 @@ example: /add-pe-program MFB-1234
 
 Implements a new PolicyEngine-based benefit program in the `benefits-api` repository. Takes a Linear ticket with program research and produces: research files (spec, initial config, test cases), a PolicyEngine program class, dependency test coverage, passing validations, and an open PR.
 
-## Phase 1: Fetch Linear Ticket
+
+## Phase 1: Gather Inputs
+
+Ask the user how they want to provide the artifacts:
+
+> How would you like to provide the program files?
+> 1. **Linear ticket** — I'll fetch the attachments from a ticket ID
+> 2. **Local files** — Point me to the three files on disk
+
+### Option 1: Linear Ticket
 
 1. Fetch the ticket with `mcp__Linear__get_issue`
 2. Extract:
@@ -28,7 +37,29 @@ Implements a new PolicyEngine-based benefit program in the `benefits-api` reposi
    git checkout {branch-name}
    ```
 
-## Phase 2: Add Research to Codebase
+### Option 2: Local Files
+
+Ask the user for the paths to the three files. Read each one and confirm you have all three before proceeding.
+
+### After gathering inputs
+
+1. Derive the **state** (e.g. `tx`, `co`, `il`) and **PolicyEngine variable name** in snake_case (e.g. `hse`, `ccad`) from the config's `white_label.code` and `program.name_abbreviated`.
+2. In `benefits-api/`, create or switch to a feature branch:
+   ```bash
+   git checkout -b {username}/mfb-{ticket}-implement-{program_name}
+   # or if the branch already exists:
+   git checkout {branch-name}
+   ```
+
+## Phase 2: PolicyEngine Pre-Flight Check (Gate)
+
+Before doing any implementation work, confirm that PolicyEngine actually exposes a variable for this program. This is a **hard gate**: if PE has no matching variable, there is no data source to build a calculator on, and the rest of the skill cannot succeed.
+
+Run `/check-pe-support` with the PE variable name (from the ticket description or the local spec/config) and state (two-letter code, e.g. `co`, `ma`, `tx`) derived in Phase 1.
+
+Follow all steps in that skill — it covers how to run the command, interpret the output, and decide whether to proceed or halt.
+
+## Phase 3: Add Research to Codebase
 
 Derive the **state** and **program name** (snake_case) from the ticket title or description.
 
@@ -49,13 +80,15 @@ benefits-api/programs/management/commands/import_program_config_data/data/{state
 benefits-api/validations/management/commands/import_validations/data/{state}_{program}.json
 ```
 
-After writing all three files, commit:
+After writing all three files, commit. Stage the specific files (not `git add .`/`-A`) so an auto-formatter doesn't sweep unrelated changes into the commit:
 ```
-git add .
+git add benefits-api/programs/programs/{state}/{program}/spec.md
+git add benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
+git add benefits-api/validations/management/commands/import_validations/data/{state}_{program}.json
 git commit -m "Add {state} {program} research files"
 ```
 
-## Phase 3: Implement the Program
+## Phase 4: Implement the Program
 
 1. **Read the PolicyEngine variable** to understand the formula and its inputs:
    ```
@@ -80,29 +113,30 @@ git commit -m "Add {state} {program} research files"
    benefits-api/programs/programs/policyengine/calculators/dependencies/tests/test_member.py
    ```
 
-5. Commit the implementation:
+5. Commit the implementation. Stage the specific files you touched (not `git add .`/`-A`) so an auto-formatter doesn't sweep unrelated changes into the commit:
    ```
-   git add .
+   git add benefits-api/programs/programs/{state}/pe/member.py
+   git add benefits-api/programs/programs/policyengine/calculators/dependencies/tests/test_member.py
    git commit -m "Implement {State}{Program} PolicyEngine program class"
    ```
 
-## Phase 4: Test the Implementation
+## Phase 5: Test the Implementation
 
-Run all commands from the `benefits-api/` directory.
+Run all commands from the `benefits-api/` directory. Use `venv/bin/python` for all `manage.py` commands — `python` may not resolve in non-interactive shells.
 
-### 4.1 Import the initial config (program stays inactive)
+### 5.1 Import the initial config (program stays inactive)
 
 Read `benefits-api/programs/management/commands/import_program_config.py` to understand the command's interface, then run it for the new config file.
 
 - If you encounter any errors during import, fix them and commit the fixes before continuing.
 
-### 4.2 Import the validations
+### 5.2 Import the validations
 
 Read `benefits-api/validations/management/commands/import_validations.py` to understand the command's interface, then run it for the new test case file.
 
 - If you encounter any errors during import, fix them and commit the fixes before continuing.
 
-### 4.3 Run validations (program inactive)
+### 5.3 Run validations (program inactive)
 
 Read `benefits-api/validations/management/commands/validate.py` to understand how to target a specific white label, then run validations for the program's white label.
 
@@ -110,18 +144,54 @@ Verify:
 - The new program's validations appear as **skipped** (expected — program is inactive)
 - Note any other programs that are currently failing so you have a baseline
 
-### 4.4 Activate the program
+### 5.4 Activate the program
 
 Set `Program.active = True` for the new program. Read the `import_program_config` command to understand how activation works (Django shell, fixture, or admin).
 
-### 4.5 Re-run validations (program active)
+### 5.5 Re-run validations (program active)
 
 Run validations for the program's white label again.
 
 Verify and fix:
 - The new program's validations are **no longer skipped**
 - If any of the new program's validations are **failing** → fix the implementation and commit
-- If any **other** programs' validations are newly failing (compare against your Phase 4.3 baseline) → fix and commit
+- If any **other** programs' validations are newly failing (compare against your Phase 5.3 baseline) → fix and commit
+
+## Phase 6: "Already Have" Checkbox (Conditional)
+
+> Only complete this phase if the program belongs on the "I already have this benefit" screener step. The rule: if participation in this program explicitly informs eligibility for *another* program — through presumptive eligibility or disqualification — it belongs on the step. Otherwise it doesn't.
+
+Ask the user: "Does participation in this program inform eligibility for another program, through presumptive eligibility or disqualification? If yes, it belongs on the 'already have' step; if not, it doesn't."
+
+If yes, proceed. If no, skip to Phase 7.
+
+### How this works now
+
+The current-benefits step is driven entirely by two fields on the `Program` model — there is **no longer** a `category_benefits` config, a per-program `has_{name}` column, a serializer `has_*` field, or any frontend wiring to add:
+
+- The screener step fetches `GET /api/screener-options/<wl>/has-benefits-programs/`, which returns every program with `show_in_has_benefits_step=True` **and** `active=True` for that white label (`screener/views.py`).
+- The serializer reads/writes the selection as `current_benefits: [name_abbreviated, ...]` (`screener/serializers.py`); the frontend stores it as a `Set<string>` of `name_abbreviated` values and renders the tile list straight from the API. No `has_*` fields are involved anywhere.
+
+> The old `category_benefits` blocks still physically sit in `configuration/white_labels/*.py`, but they are orphaned legacy config — nothing reads them. Do **not** add the program there.
+
+### 6.1 Set `show_in_has_benefits_step` on the Program
+
+Set `show_in_has_benefits_step=True` on the program (and confirm `active=True`). The program's `name_abbreviated` is the key the screener uses — no migration, serializer, or frontend change is required.
+
+Do this in the program's initial config / fixture if it's defined there, otherwise via the Program record. Verify it surfaces:
+```bash
+venv/bin/python manage.py shell -c "from programs.models import Program; print(Program.objects.filter(show_in_has_benefits_step=True, active=True, white_label__code='{state_code}').values_list('name_abbreviated', flat=True))"
+```
+
+### 6.2 Commit
+
+Stage the specific files you touched (not `git add .`/`-A`):
+```
+git commit -m "Show {program} in 'already have' screener step (show_in_has_benefits_step)"
+```
+
+## Phase 7: Open a PR
+
 
 ## Phase 5: "Already Have" Screener Step (Conditional)
 
@@ -146,20 +216,24 @@ Then:
 
 ## Phase 6: Open a PR
 
-1. Read `benefits-api/.github/pull_request_template.md`
+  Opening the PR is part of this workflow — always complete this phase.
+
+
+1. Read the canonical PR body template at `team-claude-config/docs/PR_TEMPLATE.md` and fill it in (this is the single source of truth — do not hand-roll a different structure).
 2. Create the PR:
    ```bash
    gh pr create \
      --title "Add {State} {Program} ({state_abbrev})" \
      --body "$(cat <<'EOF'
-   {contents of PR template, filled in}
+   {contents of PR_TEMPLATE.md, filled in}
    EOF
    )" \
      --assignee @me
    ```
-3. Include a link to the Linear ticket in the PR body
+3. Include a link to the Linear ticket in the PR body (under **Context & Motivation**) when the program came from a ticket.
 
-## Phase 7: Comment QA Scenarios on Linear Ticket
+## Phase 8: Comment QA Scenarios on Linear Ticket
+
 
 1. Read `benefits-api/programs/programs/{state}/{program}/spec.md`
 2. Extract the **Test Scenarios** section verbatim — everything from the `## Test Scenarios` heading to the end of the file (or the next top-level `##` heading, whichever comes first)
@@ -169,7 +243,8 @@ Then:
    ```
    The comment body must be the extracted markdown exactly as written — no reformatting, no summarizing.
 
-## Phase 8: Summary and Next Steps
+## Phase 9: Summary and Next Steps
+
 
 Summarize the changes you made (files created, test results, PR link).
 
