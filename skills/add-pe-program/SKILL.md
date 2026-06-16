@@ -165,7 +165,7 @@ Ask the user: "Does participation in this program inform eligibility for another
 
 If yes, proceed. If no, skip to Phase 7.
 
-### How this works now (post MFB-862 / MFB-720)
+### How this works now
 
 The current-benefits step is driven entirely by two fields on the `Program` model — there is **no longer** a `category_benefits` config, a per-program `has_{name}` column, a serializer `has_*` field, or any frontend wiring to add:
 
