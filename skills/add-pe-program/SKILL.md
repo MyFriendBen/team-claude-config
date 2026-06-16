@@ -55,23 +55,9 @@ Ask the user for the paths to the three files. Read each one and confirm you hav
 
 Before doing any implementation work, confirm that PolicyEngine actually exposes a variable for this program. This is a **hard gate**: if PE has no matching variable, there is no data source to build a calculator on, and the rest of the skill cannot succeed.
 
-1. From Phase 1 you have the **PolicyEngine variable name** (from the ticket description or the local spec/config) and can derive the **state** (two-letter code, e.g. `co`, `ma`, `tx`). Check both the name and the state.
+Run `/check-pe-support` with the PE variable name (from the ticket description or the local spec/config) and state (two-letter code, e.g. `co`, `ma`, `tx`) derived in Phase 1.
 
-2. From `benefits-api/`, run the discovery command (use `venv/bin/python` — `python` may not resolve in non-interactive shells). Prefer the exact variable-name lookup:
-   ```bash
-   venv/bin/python manage.py check_pe_support --exact {pe_variable_name}
-   ```
-   If you don't yet have an exact variable name, search by program concept scoped to the state:
-   ```bash
-   venv/bin/python manage.py check_pe_support {program_name} --state {state_abbrev}
-   ```
-   This hits the free, public PolicyEngine metadata endpoint — no API key required. See `benefits-api/programs/management/commands/check_pe_support.py` for full flag documentation.
-
-3. Interpret the result and gate on it:
-   - **Variable found** — the exact lookup prints the variable's details, or the search lists a variable matching the program and state. PolicyEngine supports the program → **proceed to Phase 3.**
-   - **Variable NOT found** — the exact lookup exits non-zero with "NOT in PolicyEngine", or the search returns no match for that state. **STOP. Do not proceed.** Alert the user that PolicyEngine does not appear to support this program for this state, show them the command output, and ask whether to continue anyway.
-     - If the user confirms it's OK to proceed (e.g. they know the variable lives under a different name, or believe the cached metadata is stale — try `--refresh` first), **continue as normal to Phase 3.**
-     - Otherwise, **halt the skill.**
+Follow all steps in that skill — it covers how to run the command, interpret the output, and decide whether to proceed or halt.
 
 ## Phase 3: Add Research to Codebase
 
