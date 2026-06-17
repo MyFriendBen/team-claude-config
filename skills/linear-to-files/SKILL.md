@@ -225,6 +225,8 @@ Generate a markdown document structured as follows. Incorporate all reviewer cor
 - Insurance: how value is estimated
 - In-kind: reasoning and estimate with citations
 - State whether values are citable or informed estimates
+- **For every rate/threshold, quote the operative sentence from the cited source** next to the number, not just a paraphrase — so a reviewer can confirm the number against the quote. A correct, current citation is not enough; the source can still be misread.
+- **Do not propagate unresolved placeholders into a binding field.** If the drafts/comments leave a value as "verify with PE", "~$X (estimate)", "TBD", "Team to decide", or an "X (recommended)… or Y…" fork, that is an unfinished decision, not a value. Do not silently write it into a scenario's expected result, an eligibility rule, or a benefit value as if final. If you cannot resolve it from the ticket, **surface it prominently in the generation summary as an open item that must be resolved before the ticket reaches To Do** (the developer cannot build from a fork — they will take the default and the real decision never gets made).
 
 ---
 
