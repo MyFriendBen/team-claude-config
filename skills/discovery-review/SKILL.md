@@ -210,7 +210,9 @@ For each numbered criterion:
 - **Insurance/in-kind:** Verify the estimate is reasonable and the reasoning is documented.
 - Verify whether it's presented as a citable value or an informed estimate.
 - All values discussed here must be **annual** (this is critical — the frontend divides by 12 for monthly display).
-- **For PE-backed programs (PE Custom / PE Federal): no value may remain an unverified estimate.** Flag any expected value still tagged `estimate`, `verify with PE`, `~$X`, or "verify" — that tag is an unfinished task, not a value. The value must be resolved by running the household through PolicyEngine (see Phase 4.4), or the scenario converted to eligibility-only. Shipping the tag pushes the verification onto the developer, where it gets missed.
+- **No unresolved placeholders in binding fields.** A scenario's expected result, an eligibility rule, or a benefit value must hold a single committed answer — never a deferral like `verify with PE`, `~$X (estimate)`, `TBD`, "Team to decide," `⚠️ PE verification needed`, or an "X (recommended)… or Y…" fork. These read as finished but aren't: a developer can't build from a fork, so they take the default and the real decision — value verification or a policy call — never happens. Raising the open question during discovery is correct; *leaving it in a binding field* is the failure. Resolve it (compute the value against PolicyEngine per Phase 4.4; make the policy call and write the single answer) or hold the ticket out of To Do until it's resolved.
+  - *KS Launch: TANF shipped "⚠️ PE verification needed" scenarios (the disregard question was never resolved); EITC stated every value as "~$X, verify with PE" (all off 10–40%); HCBS Scenario 8 shipped a "Team to decide" fork the implementer silently defaulted.*
+  - Checkable form: grep the spec/scenarios for `verify with PE`, `TBD`, `team to decide`, `~$`, `(recommended)`, "estimate," "PE verification needed," and "or … or" expected results — any hit in an eligibility, value, or expected-result field blocks sign-off.
 
 #### 4.4 — Test scenarios
 
