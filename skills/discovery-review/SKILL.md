@@ -116,8 +116,11 @@ Check each section of the config systematically. For every issue found, record i
 - `code` must be a valid 2-letter state abbreviation or `cesn`. Verify it matches the program's state.
 
 #### 3.3 — `program_category`
-- If the category already exists in the fixture data (from Phase 2.1), the config should use `external_name` only — flag if it unnecessarily re-specifies `name`, `icon`, `description`, or `tax_category`.
-- If this is a genuinely new category, verify it includes `name`, `icon`, and optionally `description` and `tax_category`.
+- **Confirm-or-define (critical — this fails loudly at import, not silently):** every category referenced by `external_name` must *either* already exist *or* be fully defined in this config. Check the `external_name` against the existing categories from Phase 2.1:
+  - If it **already exists** → reference by `external_name` only; flag if it unnecessarily re-specifies `name`, `icon`, `description`, or `tax_category`.
+  - If it does **not** exist → the config **must** include `name` + `icon` (and optionally `description`, `tax_category`) so the import creates it. A config that references a non-existent category by `external_name` alone **fails the import outright** (`"Program category '{x}' does not exist. To create a new category, provide: icon, name."`). Discovery review never runs the import, so this looks fine on paper and breaks at implementation/deploy.
+  - *Real-world example:* the KS MSP config referenced `program_category: {external_name: "ks_healthcare"}` with no `name`/`icon`, assuming the category existed. It didn't, and the import failed. Do not assume "another program creates it" — either it already exists in Phase 2.1's data, or this config defines it.
+  - **State-launch corollary:** when several programs in a batch share a brand-new category, exactly one config should define it (name+icon) and the rest reference it; flag if none of them define it, or if two define the same one with conflicting name/icon.
 - Verify naming convention: `{state}_{category_type}` (e.g., `co_food`, `tx_cash`).
 - Valid icon values seen in the codebase: `cash`, `food`, `health_care`, `housing`, `transportation`, `child_care`, `tax_credit`. Flag any other value as needing dev confirmation.
 
@@ -150,13 +153,13 @@ Check every field against these rules:
 
 #### 3.5 — `documents`
 - Omit the key entirely if no documents — flag empty arrays `[]`.
-- Each document needs `external_name` and `text`. Check if the `external_name` already exists in the DB (Phase 2.1) — if so, reuse it.
+- **Confirm-or-define** (same rule as categories in 3.3): check each `external_name` against Phase 2.1. If it already exists → reference it (reuse). If it does **not** → the config must fully define it (`external_name` + `text`). Don't reference a document by `external_name` alone unless it's confirmed to already exist.
 - `link_url` and `link_text` should both be `""` or both populated.
 
 #### 3.6 — `navigators`
 - Omit the key entirely if no navigators — flag empty arrays `[]`.
+- **Confirm-or-define** (same rule as 3.3): check each `external_name` against Phase 2.1. If it already exists → reference it. If it does **not** → the config must fully define it with all required fields below. Don't reference a navigator by `external_name` alone unless confirmed to already exist.
 - Every navigator needs `external_name`, `name`, `email`, `description`, `assistance_link`.
-- Check if navigator already exists in DB fixtures.
 - `phone_number` must be E.164 format (`+1XXXXXXXXXX`).
 - `counties` array values must follow the state's naming convention.
 
@@ -188,6 +191,10 @@ For each numbered criterion:
    - A .gov or legal site (e.g., `law.cornell.edu`) — NOT third-party summary sites
    - Specific enough to verify (include section numbers, e.g., `10 CFR 440.22(a)(3)`)
    - Flag any sources that look like AI-fabricated citations (common pattern: plausible-sounding section numbers that don't exist)
+   - **Current AND faithful.** Two separate checks, both required:
+     - *Recency* — is the cited source the current tax/program year's? (Catches stale links — e.g., a 2010 form cited for a 2025 rate.)
+     - *Fidelity* — does the cited document actually **state** the number the spec claims? A correct, current citation is necessary but not sufficient: the number can still be a misread of the right document. For every rate/threshold/percentage, **quote the operative sentence from the source verbatim** next to the value so it can be confirmed at a glance. A paraphrase hides a misread; a quote exposes it.
+     - *Real-world example to watch for:* the KS CDCC spec cited the correct, current source (Notice 24-09) but stated "25%" — it read the notice's "prior to amendment, 25%" sentence instead of the "as amended… 50%" sentence in the same document. The actual rate is 50%. A recency check alone would have passed it; only quoting the operative sentence catches this.
 
 5. **Are any criteria missing?** Based on your understanding of the program type and the sources cited, flag if obvious eligibility criteria appear to be absent.
 
@@ -203,6 +210,7 @@ For each numbered criterion:
 - **Insurance/in-kind:** Verify the estimate is reasonable and the reasoning is documented.
 - Verify whether it's presented as a citable value or an informed estimate.
 - All values discussed here must be **annual** (this is critical — the frontend divides by 12 for monthly display).
+- **For PE-backed programs (PE Custom / PE Federal): no value may remain an unverified estimate.** Flag any expected value still tagged `estimate`, `verify with PE`, `~$X`, or "verify" — that tag is an unfinished task, not a value. The value must be resolved by running the household through PolicyEngine (see Phase 4.4), or the scenario converted to eligibility-only. Shipping the tag pushes the verification onto the developer, where it gets missed.
 
 #### 4.4 — Test scenarios
 
@@ -225,6 +233,13 @@ Check all test scenarios in the spec for:
    - `household_size` matches number of members described
    - Ages and birth years are consistent
    - Income amounts are realistic for the scenario being tested
+
+6. **Run every scenario through PolicyEngine and diff against the spec (PE-backed programs only).** This is the highest-value check and the one most often skipped. For a PE Custom / PE Federal program you do **not** need our implementation to verify values — the program is `fraction × <PE variable>`, so each scenario's household can be run directly through PolicyEngine (live API or a pinned local install) and compared to the spec's stated expected value/eligibility.
+   - Build each spec scenario's household, run the relevant PE variable(s), and record PE's output next to the spec's expected outcome.
+   - **Flag every mismatch** — both value drift and eligibility flips. Real cases this catches: estimates off 10–40% (the value was guessed, not computed); an eligibility flip (a non-refundable credit that resolves to $0 because tax liability is fully absorbed); and cases PE *cannot* compute at all (a genuine PE bug — e.g. CDCC attributing $0 expenses to a disabled adult dependent), which become `mfb-policy-engine` fix requests.
+   - This is the concrete form of the "PE delta report" acceptance criterion in the [Discovery doc](https://myfriendben.getoutline.com/doc/discovery-y7UDrfmYzN). With the importable validation suite being retired, this scenario-level diff is the **primary** correctness gate — there is no later automated check to fall back on.
+   - This applies to **all** spec scenarios, not just the 3 selected for the validation JSON (the others are never machine-checked otherwise — exactly where errors hide).
+   - Does **not** apply to MFB Custom programs: there is no pre-existing engine to diff against, so their values come from the cited policy data and are verified by the source-fidelity check (Phase 4.1.4) instead.
 
 ---
 
