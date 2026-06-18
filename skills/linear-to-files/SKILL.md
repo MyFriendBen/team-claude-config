@@ -126,7 +126,7 @@ Generate valid JSON matching the schema below. Apply any reviewer corrections to
     ],
     "name": "<Official Program Name (ACRONYM if commonly used)>",
     "description_short": "<One-line teaser, ~120 chars max, no period>",
-    "description": "<Full description, ~4 paragraphs, \\n\\n for breaks. Middle school reading level. NEVER describe eligibility criteria — not income limits, not age requirements, not residency rules, not enrollment requirements, nothing. The screener handles eligibility checks; the description should explain what the program is, how the benefit works, any helpful context about administration or application, and next steps.>",
+    "description": "<Full description, ~4 paragraphs, \\n\\n for breaks. Middle school reading level. NEVER describe eligibility criteria — not income limits, not age requirements, not residency rules, not enrollment requirements, nothing. The screener handles eligibility checks; the description should explain what the program is, how the benefit works, any helpful context about administration or application, and next steps. ALSO NEVER include: (a) precise rates, percentages, dollar amounts, or formulas (e.g. '17% of your federal EITC', '$2,000 asset limit') — these confuse users and go stale; describe the benefit qualitatively instead ('builds on the federal credit'). (b) Legal/statutory citations or section numbers (e.g. 'K.S.A. § 79-32,205', '26 U.S.C. § 32') — citations belong ONLY in spec.md sources, NEVER in this user-facing description. Do not carry a spec citation into the description.>",
     "learn_more_link": "https://...",
     "apply_button_link": "https://...",
     "apply_button_description": "",  // "" defaults to "Apply Now"
