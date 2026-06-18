@@ -123,10 +123,12 @@ Generate valid JSON matching the schema below. Apply any reviewer corrections to
     "legal_status_required": [
       "citizen", "non_citizen", "refugee", "gc_5plus", "gc_5less", "otherWithWorkPermission"
       // Include all 6 if no immigration restriction. Subset if restricted.
+      // Immigration/citizenship is NOT a data gap — it's configured HERE, not screened as a field.
+      // Never mark an immigration requirement ⚠️ data gap in the spec; set this subset instead.
     ],
     "name": "<Official Program Name (ACRONYM if commonly used)>",
     "description_short": "<One-line teaser, ~120 chars max, no period>",
-    "description": "<Full description, ~4 paragraphs, \\n\\n for breaks. Middle school reading level. NEVER describe eligibility criteria — not income limits, not age requirements, not residency rules, not enrollment requirements, nothing. The screener handles eligibility checks; the description should explain what the program is, how the benefit works, any helpful context about administration or application, and next steps. ALSO NEVER include: (a) precise rates, percentages, dollar amounts, or formulas (e.g. '17% of your federal EITC', '$2,000 asset limit') — these confuse users and go stale; describe the benefit qualitatively instead ('builds on the federal credit'). (b) Legal/statutory citations or section numbers (e.g. 'K.S.A. § 79-32,205', '26 U.S.C. § 32') — citations belong ONLY in spec.md sources, NEVER in this user-facing description. Do not carry a spec citation into the description.>",
+    "description": "<Full description, ~4 paragraphs, \\n\\n for breaks. Middle school reading level. NEVER describe eligibility criteria — not income limits, not age requirements, not residency rules, not enrollment requirements, nothing. The screener handles eligibility checks; the description should explain what the program is, how the benefit works, any helpful context about administration or application, and next steps. The closing 'how to apply' line must FUNNEL to the Apply button (the program's apply_button_link) — phrase it as the single primary action the button performs (a phone alternative is fine); do NOT rattle off a list of other sites to visit or things to research/do, which sends users away from the one action we surface. ALSO NEVER include: (a) precise rates, percentages, dollar amounts, or formulas (e.g. '17% of your federal EITC', '$2,000 asset limit') — these confuse users and go stale; describe the benefit qualitatively instead ('builds on the federal credit'). (b) Legal/statutory citations or section numbers (e.g. 'K.S.A. § 79-32,205', '26 U.S.C. § 32') — citations belong ONLY in spec.md sources, NEVER in this user-facing description. Do not carry a spec citation into the description.>",
     "learn_more_link": "https://...",
     "apply_button_link": "https://...",
     "apply_button_description": "",  // "" defaults to "Apply Now"
@@ -245,7 +247,7 @@ These scenarios are the single source of truth for correctness — a dev impleme
 **Rules for eligibility criteria:**
 - Include ONLY real eligibility requirements — not administrative requirements (ID, interviews, proof of X — those go in `documents`), not priority criteria (those get their own section), not application deadlines
 - Every criterion needs a source that is a `.gov` or legal site (e.g. `law.cornell.edu`) — NOT third-party summary sites
-- Data gaps must explain the assumption being made (inclusivity assumption = we assume all households pass that check)
+- Data gaps must explain the assumption being made (inclusivity assumption = we assume all households pass that check). **Default to inclusive — never resolve a data gap with an exclusionary cutoff that turns away likely-eligible people** (e.g. don't apply a single-applicant asset limit to couples). Surface the nuance in the description/warning instead.
 - Apply ALL reviewer corrections: removed criteria, corrected thresholds, added sources, etc.
 
 **Scenario hygiene** — across all scenarios in the spec, the full set should NOT:
