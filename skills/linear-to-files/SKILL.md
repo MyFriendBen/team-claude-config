@@ -1,11 +1,11 @@
 ---
 name: linear-to-files
-description: Pull a Linear ticket and its comments, synthesize the initial drafts and all subsequent reviewer updates, and generate the three program files ready for dev implementation — [program]_spec.md, [program]_initial_config.json, and [program].json (validation scenarios).
+description: Pull a Linear ticket and its comments, synthesize the initial drafts and all subsequent reviewer updates, and generate the two program files ready for dev implementation — [program]_spec.md and [program]_initial_config.json.
 ---
 
 # Linear → Program Files Workflow
 
-Reads a Linear ticket produced by the Program Researcher, synthesizes all comments (initial drafts + reviewer corrections) into their final merged state, and writes three output files: a spec, a config JSON, and a validation scenarios JSON.
+Reads a Linear ticket produced by the Program Researcher, synthesizes all comments (initial drafts + reviewer corrections) into their final merged state, and writes two output files: a spec and a config JSON. (The spec's **Test Scenarios** section is the single source of truth for correctness — there is no separate validation-scenarios JSON.)
 
 ## Usage
 
@@ -41,11 +41,11 @@ If no ticket ID is provided, ask the user for one before proceeding.
 
 Read each comment body carefully and categorize it. Comments fall into several types:
 
-**Initial draft comments** — typically posted by an AI researcher or program researcher. These contain the raw first-pass content for one or more of the three files. Look for:
-- Large JSON blocks → this is the `initial_config.json` or `validation_scenarios.json` draft
+**Initial draft comments** — typically posted by an AI researcher or program researcher. These contain the raw first-pass content for one or both files. Look for:
+- Large JSON blocks → this is the `initial_config.json` draft
 - Numbered eligibility criteria lists with sub-bullets → this is the `spec.md` draft
-- Numbered test scenario descriptions with "Steps," "Expected," "Why this matters" → these are spec test scenario narratives
-- Household JSON objects with `notes`, `household`, `expected_results` keys → these are validation scenario JSON objects
+- Numbered test scenario descriptions with "Steps," "Expected," "Why this matters" → these are spec test scenario narratives (they go in the spec's **Test Scenarios** section)
+- Household JSON objects with `notes`, `household`, `expected_results` keys → these describe test-scenario households; fold their details (household makeup, expected eligibility + value) into the corresponding spec **Test Scenarios** entries. Do **not** emit a separate validation-scenarios JSON file.
 
 **Reviewer update comments** — posted by human reviewers (typically after the initial drafts). These contain corrections, feedback, and amendments. Look for:
 - Numbered lists reviewing the initial criteria one by one
@@ -54,7 +54,7 @@ Read each comment body carefully and categorize it. Comments fall into several t
 - Income threshold corrections
 - Scenario-level decisions (KEEP / KEEP BUT REVISE / REMOVE)
 
-**Important — scenario prioritization comments:** Reviewers sometimes follow up with a comment calling out 2–3 scenarios as the "core" or "most representative" ones. **Ignore this prioritization entirely.** All scenarios marked KEEP or KEEP BUT REVISE (across all reviewer comments) must be included in both the spec.md and the .json file. Prioritization comments are personal preference notes — they do not override the KEEP/REMOVE decisions made in the main review comment.
+**Important — scenario prioritization comments:** Reviewers sometimes follow up with a comment calling out 2–3 scenarios as the "core" or "most representative" ones. **Ignore this prioritization entirely.** All scenarios marked KEEP or KEEP BUT REVISE (across all reviewer comments) must be included in the spec.md **Test Scenarios** section. Prioritization comments are personal preference notes — they do not override the KEEP/REMOVE decisions made in the main review comment.
 
 **Action/instruction comments** — short comments like "@elliott generate files" — ignore these for content purposes.
 
@@ -62,7 +62,7 @@ Build a mental model of the **final state** of each file by applying all reviewe
 
 ---
 
-### Phase 3: Synthesize the Three Files
+### Phase 3: Synthesize the Two Files
 
 Using the initial drafts and all reviewer amendments, generate the final versions of each file. Apply ALL corrections from reviewer comments — later comments take precedence over earlier ones.
 
@@ -232,12 +232,13 @@ Generate a markdown document structured as follows. Incorporate all reviewer cor
 
 ## Test Scenarios
 
-Include ALL scenarios that reviewers marked KEEP or KEEP BUT REVISE, with revisions applied. Do not omit any approved scenario. Do not prioritize some over others. For each scenario:
+These scenarios are the single source of truth for correctness — a dev implements them as 1:1 unit tests (MFB Custom) or runs them through PolicyEngine (PE programs), so each must carry enough committed detail to build from. Include ALL scenarios that reviewers marked KEEP or KEEP BUT REVISE, with revisions applied. Do not omit any approved scenario, do not artificially reduce the count, and do not prioritize some over others. For each scenario:
 
 **Scenario [N]: [Scenario name]**
 - What's being tested: [brief description]
 - Expected result: eligible / ineligible
-- Key household details: [income, size, relevant member attributes]
+- Expected value: [committed annual value for eligible scenarios; omit for ineligible — no placeholders like "verify with PE" or "~$X"]
+- Key household details: [income, size, county, relevant member attributes — enough to reconstruct the household]
 - Revisions applied: [list any reviewer corrections made to this scenario, or "none"]
 ```
 
@@ -247,84 +248,19 @@ Include ALL scenarios that reviewers marked KEEP or KEEP BUT REVISE, with revisi
 - Data gaps must explain the assumption being made (inclusivity assumption = we assume all households pass that check)
 - Apply ALL reviewer corrections: removed criteria, corrected thresholds, added sources, etc.
 
----
-
-#### 3.3 — `[name_abbreviated].json`
-
-Generate a JSON array containing **all scenarios that reviewers marked KEEP or KEEP BUT REVISE**, with all requested revisions applied. Remove only those explicitly marked REMOVE. Do not artificially reduce the count — the goal is to encode every approved scenario.
-
-The initial draft comments typically contain the full list of scenarios (often 10–15). Reviewer comments then sort them into three buckets:
-- **KEEP** — encode as-is (applying any other numeric/threshold corrections from earlier reviewer comments)
-- **KEEP BUT REVISE** — encode with the specific changes the reviewer described
-- **REMOVE** — omit entirely
-
-If a later reviewer comment calls out 3 specific scenarios as the "core" or "representative" set, that is guidance for the **spec.md test scenarios section only** — it is not a signal to delete the other approved scenarios from the .json file.
-
-```json
-[
-  {
-    "notes": "<Clear description of what's being tested>",
-    "household": {
-      "white_label": "<state_code>",
-      "is_test": true,
-      "agree_to_tos": true,
-      "is_13_or_older": true,
-      "zipcode": "<valid in-state ZIP>",
-      "county": "<County name only — no 'County' suffix, e.g. 'King' not 'King County'>",
-      "household_size": <number — MUST match number of household_members>,
-      "household_assets": <number>,
-      "household_members": [
-        {
-          "relationship": "headOfHousehold",
-          "age": <number>,
-          "birth_year": <year — must be consistent with age>,
-          "birth_month": <1-12>,
-          "has_income": <true|false>,
-          "income_streams": [
-            {
-              "type": "wages",
-              "amount": <number>,
-              "frequency": "monthly"
-            }
-          ],
-          "insurance": { "none": true }
-        }
-      ],
-      "expenses": []
-    },
-    "expected_results": {
-      "program_name": "<name_abbreviated — must exactly match config>",
-      "eligible": <true|false>
-      // "value": <number> — ONLY include for eligible scenarios, omit for ineligible
-    }
-  }
-]
-```
-
-**Field rules:**
-- `household_size` MUST exactly equal the number of entries in `household_members`
-- `birth_year` and `age` must be internally consistent (use today's year to compute)
-- `value` in `expected_results`: include ONLY for eligible scenarios — omit entirely for ineligible (do not set to 0)
-- `expenses` must always be present as `[]`
-- Every household member must have an `insurance` object
-- `program_name` must exactly match `name_abbreviated` in the config — case-sensitive
-- `is_test`, `agree_to_tos`, `is_13_or_older` are always `true`
-- Every household must have a `"relationship": "headOfHousehold"` member
-
-**Across all scenarios, the full set should NOT:**
+**Scenario hygiene** — across all scenarios in the spec, the full set should NOT:
 - Contain duplicate scenarios or ones with variation irrelevant to the program's eligibility rules
 - Use FPL/AMI/MFI values from the wrong year (use the `year` from the config, or current year if not set)
-
-**The spec.md test scenarios section** (distinct from the .json) is where you describe 3 representative scenarios in prose — the "golden path" eligible, the primary ineligible, and the key edge case. Those 3 are for human readability and quick orientation. The .json file is the full validation suite and should be larger.
+- Leave any internal inconsistency: each scenario's `household_size` must match the members described, and ages/birth years must be consistent (use today's year to compute)
+- County values must follow the state's naming convention (e.g. "King" vs "King County" depending on state)
 
 ---
 
 ### Phase 4: Write and Present Files
 
-1. **Save all four files** to the current project directory:
+1. **Save all three files** to the current project directory:
    - `[name_abbreviated]_spec.md`
    - `[name_abbreviated]_initial_config.json`
-   - `[name_abbreviated].json`
    - `[name_abbreviated]_changelog.md`
 
 2. **The changelog** (`[white_label]_[name_abbreviated]_changelog.md`) is a record of everything the skill did. Structure it as:
@@ -372,7 +308,6 @@ If a later reviewer comment calls out 3 specific scenarios as the "core" or "rep
 
    ✓ wa_wsos_spec.md
    ✓ wa_wsos_initial_config.json
-   ✓ wa_wsos.json
    ✓ wa_wsos_changelog.md
    ```
 
@@ -388,7 +323,7 @@ If a later reviewer comment calls out 3 specific scenarios as the "core" or "rep
 
 **Unclear content:** If a comment's intent is unclear (e.g. it's a general question rather than a correction), skip it for synthesis purposes but note it in your summary.
 
-**Missing initial draft:** If a comment thread has no initial draft for one of the three files (e.g. no config JSON was posted), generate that file as best you can from the spec and other context, and note that it was inferred rather than extracted.
+**Missing initial draft:** If a comment thread has no initial draft for one of the two files (e.g. no config JSON was posted), generate that file as best you can from the spec and other context, and note that it was inferred rather than extracted.
 
 **No reviewer updates:** If there are only initial drafts and no reviewer corrections, use the initial drafts as-is but note this in the summary — the files may need additional human review.
 
@@ -418,4 +353,4 @@ Is this the right ticket?
 - Reviewer comments often number their feedback to match criteria numbers — use these to precisely apply corrections
 - Comments marked "REMOVE" for a criterion mean remove it from the output entirely
 - Comments marked "DATA GAP" mean add ⚠️ *data gap* and handle as described above
-- The three output files are what a dev will pick up to implement the program — they must be complete and accurate
+- The two artifacts (spec + config) are what a dev will pick up to implement the program — they must be complete and accurate, and the spec's Test Scenarios must carry committed expected values

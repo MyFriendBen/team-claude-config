@@ -1,11 +1,13 @@
 ---
 name: discovery-review
-description: Review the three program researcher artifacts (initial_config.json, spec.md, validation .json) attached to a Linear ticket for accuracy, format, and completeness. Produces corrected files and a changelog in ./discovery-reviews/{ticket-id}/.
+description: Review the two program researcher artifacts (initial_config.json, spec.md) attached to a Linear ticket for accuracy, format, and completeness. Produces corrected files and a changelog in ./discovery-reviews/{ticket-id}/.
 ---
 
 # Discovery Review Workflow
 
-Reviews the three program research artifacts attached to a Linear ticket — `[program]_initial_config.json`, `[program]_spec.md`, and `[program].json` (validation scenarios) — for accuracy, format, and completeness. Produces corrected versions of each file plus a changelog documenting every change.
+Reviews the two program research artifacts attached to a Linear ticket — `[program]_initial_config.json` and `[program]_spec.md` — for accuracy, format, and completeness. Produces corrected versions of each file plus a changelog documenting every change.
+
+The deliverables are now two artifacts: the config and the spec.md. There is no separate validation `.json` artifact — the spec.md **Test Scenarios** are the single source of truth for correctness and are reviewed here for coverage and for committed expected values (no unresolved placeholders).
 
 ## Usage
 
@@ -22,10 +24,9 @@ If no ticket ID is provided, ask the user for one before proceeding.
 ### Phase 1: Fetch Ticket and Attachments
 
 1. **Fetch the issue** using the Linear MCP tool (`get_issue`) with the provided ticket ID.
-2. **Identify the three artifact files** from the ticket description or attachments. The three files are:
+2. **Identify the two artifact files** from the ticket description or attachments. The two files are:
    - `[program]_initial_config.json` — program config for DB import
    - `[program]_spec.md` — eligibility criteria, benefit value, test scenarios
-   - `[program].json` — validation scenario JSON array
 3. **Download each attachment** using `get_attachment` for each attachment ID found on the ticket. If attachments are embedded as text/code blocks in the ticket description or comments, extract them from there instead.
 4. **Also fetch all comments** using `list_comments` (ordered by `createdAt`, limit 250) — reviewer corrections in comments must be accounted for. If a reviewer has already left corrections, apply those corrections as the baseline before running the review checks below.
 5. **Extract `name_abbreviated`** from the config JSON's `program.name_abbreviated` field.
@@ -36,13 +37,13 @@ If no ticket ID is provided, ask the user for one before proceeding.
 ```
 Ticket: MFB-1234 — CO: Supplemental Nutrition Assistance Program
 Program: co_snap
-Attachments found: 3
+Attachments found: 2
 Comments found: N
 
 Saving originals and beginning review...
 ```
 
-If any of the three files are missing, warn the user and proceed with what's available.
+If either of the two files is missing, warn the user and proceed with what's available.
 
 ---
 
@@ -83,14 +84,14 @@ Reference the screener field inventory from `/find-screener-fields` (documented 
 - Data gaps are correctly identified — criteria that reference information we don't capture should be marked with ⚠️ *data gap*
 - No criteria are missing screener field mappings that should have them
 
-#### 2.3 — Validation scenario schema
+#### 2.3 — Household field/enum reference
 
 Reference the test case schema at:
 ```
 benefits-api/validations/management/commands/import_validations/test_case_schema.json
 ```
 
-This defines valid field names, enum values, and required fields for validation scenarios. Use it to catch invalid field names, enum values, or missing required fields.
+This defines valid household field names, enum values (relationships, income stream types, frequencies), and county naming conventions. Even though there is no longer a separate validation `.json` artifact, the spec.md test scenarios describe households using these same conventions — use this reference to sanity-check that the scenarios' member/income/county details are internally valid.
 
 #### 2.4 — County naming conventions
 
@@ -100,7 +101,7 @@ County naming varies by state. From the schema:
 - **MA:** City names instead of counties (e.g., `"Boston"`, `"Cambridge"`)
 - **WA:** Include "County" suffix (e.g., `"King County"`)
 
-Verify all county values in the validation scenarios follow the correct convention for their state.
+Verify all county values in the config and the spec's test scenarios follow the correct convention for their state.
 
 ---
 
@@ -239,77 +240,21 @@ Check all test scenarios in the spec for:
 6. **Run every scenario through PolicyEngine and diff against the spec (PE-backed programs only).** This is the highest-value check and the one most often skipped. For a PE Custom / PE Federal program you do **not** need our implementation to verify values — the program is `fraction × <PE variable>`, so each scenario's household can be run directly through PolicyEngine (live API or a pinned local install) and compared to the spec's stated expected value/eligibility.
    - Build each spec scenario's household, run the relevant PE variable(s), and record PE's output next to the spec's expected outcome.
    - **Flag every mismatch** — both value drift and eligibility flips. Real cases this catches: estimates off 10–40% (the value was guessed, not computed); an eligibility flip (a non-refundable credit that resolves to $0 because tax liability is fully absorbed); and cases PE *cannot* compute at all (a genuine PE bug — e.g. CDCC attributing $0 expenses to a disabled adult dependent), which become `mfb-policy-engine` fix requests.
-   - This is the concrete form of the "PE delta report" acceptance criterion in the [Discovery doc](https://myfriendben.getoutline.com/doc/discovery-y7UDrfmYzN). With the importable validation suite being retired, this scenario-level diff is the **primary** correctness gate — there is no later automated check to fall back on.
-   - This applies to **all** spec scenarios, not just the 3 selected for the validation JSON (the others are never machine-checked otherwise — exactly where errors hide).
-   - Does **not** apply to MFB Custom programs: there is no pre-existing engine to diff against, so their values come from the cited policy data and are verified by the source-fidelity check (Phase 4.1.4) instead.
+   - This is the concrete form of the "PE delta report" acceptance criterion in the [Discovery doc](https://myfriendben.getoutline.com/doc/discovery-y7UDrfmYzN). The separate importable validation suite has been retired, so this scenario-level diff is the **primary** correctness gate — there is no later automated check to fall back on.
+   - This applies to **all** spec scenarios (every scenario should be machine-checked against PE — the unchecked ones are exactly where errors hide).
+   - Does **not** apply to MFB Custom programs: there is no pre-existing engine to diff against, so their values come from the cited policy data and are verified by the source-fidelity check (Phase 4.1.4) instead. (For MFB Custom programs the scenarios are instead realized as 1:1 unit tests at implementation time.)
 
 ---
 
-### Phase 5: Review `[program].json` (Validation Scenarios)
+### Phase 5: (Retired) Validation-Scenarios Review
 
-#### 5.1 — JSON validity
-- Parse the JSON array. Top level must be `[...]`.
-- Check for trailing commas, mismatched brackets, curly quotes.
+> The separate `[program].json` validation-scenarios artifact and the importable validation suite have been retired. There is no longer a third file to review here. The spec.md **Test Scenarios** are the single source of truth and are reviewed in **Phase 4.4** for coverage, internal consistency, committed expected values (no placeholders), and — for PE-backed programs — a run-through-PE diff. Skip directly to Phase 6.
 
-#### 5.2 — Schema compliance
+The household-level sanity checks that used to live in this phase still apply to the **spec.md scenarios** — fold them into the Phase 4.4 review rather than treating them as a separate file:
 
-For each scenario object, validate against the test case schema:
-
-| Field | Check |
-|-------|-------|
-| `notes` | Required. Should clearly describe what's being tested. |
-| `household.white_label` | Must match the program's state code. Must be a valid enum value. |
-| `household.is_test` | Must be `true`. |
-| `household.agree_to_tos` | Must be `true`. |
-| `household.is_13_or_older` | Must be `true`. |
-| `household.zipcode` | Must be a valid 5-digit ZIP in the correct state. |
-| `household.county` | Must follow the state's naming convention (Phase 2.4). |
-| `household.household_size` | Must exactly equal the number of entries in `household_members`. |
-| `household.household_members` | At least one member. Must include exactly one `headOfHousehold`. |
-| `household.expenses` | Must be present (at least empty `[]`). |
-| `expected_results.program_name` | Must exactly match `name_abbreviated` from the config (case-sensitive). |
-| `expected_results.eligible` | Required boolean. |
-| `expected_results.value` | Include ONLY for eligible scenarios. Omit entirely for ineligible (not `0`). Must be **annual** value. |
-
-#### 5.3 — Per-member validation
-
-For each household member:
-
-| Field | Check |
-|-------|-------|
-| `relationship` | Must be a valid enum: `headOfHousehold`, `spouse`, `domesticPartner`, `child`, `fosterChild`, `parent`, `fosterParent`, `stepParent`, `grandParent`, `grandChild`, `sibling`, `other` |
-| `age` | Required integer >= 0. |
-| `birth_year` + `birth_month` | Must be consistent with `age`. A child with `age: 0` and `birth_year: 2023` is wrong in 2026. |
-| `has_income` | Must be `true` if `income_streams` is non-empty, `false` if empty. |
-| `income_streams` | If present, each needs `type` (valid enum), `amount` (number >= 0), `frequency` (valid enum). |
-| `insurance` | Required on every member. At minimum `{"none": true}`. |
-
-Valid income stream types (from schema): `wages`, `selfEmployment`, `sSDisability`, `sSRetirement`, `sSI`, `sSSurvivor`, `sSDependent`, `unemployment`, `cashAssistance`, `cOSDisability`, `workersComp`, `veteran`, `childSupport`, `alimony`, `gifts`, `boarder`, `pension`, `investment`, `rental`, `deferredComp`, `workersCompensation`, `veteransBenefits`, `rentalIncome`, `other`
-
-Valid frequencies: `monthly`, `weekly`, `biweekly`, `semimonthly`, `yearly`, `hourly`
-
-#### 5.4 — Scenario coverage
-
-**Important:** The validation JSON intentionally contains only 3 scenarios, even though the spec may describe many more test scenarios. This is by design — the 3 scenarios in the JSON are deliberately selected as the most representative subset for the validation suite. Do NOT flag the mismatch in count between spec scenarios and JSON scenarios as an issue.
-
-The 3 scenarios should cover different eligibility dimensions:
-
-1. **Clearly eligible, standard case** — golden path hitting all criteria
-2. **Clearly ineligible, primary exclusion** — most common disqualifying reason
-3. **Edge case or nuance** — boundary condition, multi-member interaction, or program-specific wrinkle
-
-Flag if:
-- All 3 test the same dimension of eligibility
-- There are duplicate scenarios (same logic branch with irrelevant variation)
-- A major eligibility criterion has no corresponding ineligible scenario
-- Scenarios use FPL/AMI values from the wrong year
-
-#### 5.5 — Cross-file consistency
-
-- `program_name` in every `expected_results` must exactly match `name_abbreviated` in the config
-- `white_label` in every scenario must match `white_label.code` in the config
-- Eligible scenario `value` amounts should be consistent with the benefit value methodology described in the spec
-- County values must be valid for the state
+- **Internal consistency per scenario:** `household_size` matches the number of members described; each member's `age`/`birth_year`/`birth_month` are consistent (a child with `age: 0` and `birth_year: 2023` is wrong in 2026); one `headOfHousehold`; income amounts realistic; valid relationship/income-stream/frequency conventions (Phase 2.3).
+- **Expected results committed:** every scenario states a single committed eligibility outcome and, for eligible scenarios, an **annual** value (no `0`-as-placeholder, no deferral — see Phase 4.3).
+- **Cross-file consistency:** scenario households use the program's `white_label.code` (state), and county values follow the state's naming convention (Phase 2.4); expected values are consistent with the benefit-value methodology in the spec.
 
 ---
 
@@ -326,7 +271,7 @@ Using the screener field inventory from `find-screener-fields` (Phase 2.2), perf
 
 3. **Identify phantom fields** — any field cited in the spec that doesn't exist in the screener models.
 
-4. **Check the validation scenarios** — do they use only fields that exist in the test case schema? Flag any invalid field names.
+4. **Check the spec's test scenarios** — do their household details use only fields/enums that exist (per the reference in Phase 2.3)? Flag any invalid field names.
 
 Present a brief summary of findings (not the full mapping — just issues found).
 
@@ -349,11 +294,10 @@ Use `WebFetch` to check each URL. Flag any that return errors (404, 500, connect
 
 #### 8.1 — Write corrected files
 
-Save corrected versions of all three files to `./discovery-reviews/{ticket-id}/`:
+Save corrected versions of both files to `./discovery-reviews/{ticket-id}/`:
 
 - `{name_abbreviated}_initial_config.json` — corrected config
 - `{name_abbreviated}_spec.md` — corrected spec
-- `{name_abbreviated}.json` — corrected validation scenarios
 
 Only modify things that are clearly wrong (format errors, schema violations, field name typos, internal inconsistencies). For judgment calls (is this description good enough? is this source credible?), flag in the changelog but don't change the file — let the reviewer decide.
 
@@ -398,13 +342,13 @@ Save `{name_abbreviated}_review_changelog.md` to the same directory:
 
 ---
 
-## Validation Scenarios (`.json`)
+## Test Scenarios (in `_spec.md`)
 
 ### Auto-fixed
-- **Scenario N ([notes]):** [what was wrong] → [what it was changed to]. [Why.]
+- **Scenario N ([name]):** [what was wrong] → [what it was changed to]. [Why.]
 
 ### Flagged for reviewer
-- **Scenario N ([notes]):** [concern]. [Recommendation.]
+- **Scenario N ([name]):** [concern — e.g. coverage gap, unresolved expected value, PE diff]. [Recommendation.]
 
 ---
 
@@ -431,7 +375,6 @@ Discovery review complete for {name_abbreviated} ({ticket-id}):
 
   ✓ {name_abbreviated}_initial_config.json
   ✓ {name_abbreviated}_spec.md
-  ✓ {name_abbreviated}.json
   ✓ {name_abbreviated}_review_changelog.md
 
   Auto-fixed: N issues
@@ -447,20 +390,14 @@ Provide a brief summary of the most important findings. If there are critical is
 ## What to Auto-fix vs. Flag
 
 **Auto-fix (change in the output file):**
-- JSON syntax errors (trailing commas, missing brackets)
+- JSON syntax errors in the config (trailing commas, missing brackets)
 - Curly/smart quotes → straight quotes
-- `household_size` not matching member count → update to match
-- `birth_year`/`age` inconsistency → fix `birth_year` to match `age`
-- Missing `expenses: []` → add it
-- Missing `insurance` on a member → add `{"none": true}`
-- `is_test`/`agree_to_tos`/`is_13_or_older` not `true` → fix
-- `value: 0` on ineligible scenario → remove `value` key
-- `value` present on ineligible scenario → remove `value` key
 - `website_description` not matching `description_short` → sync them
 - Empty `documents: []` or `navigators: []` → remove the key
-- County naming convention wrong → fix to match state convention
+- County naming convention wrong (in the config or in a spec scenario) → fix to match state convention
 - Deprecated `age` field in screener field references → note `birth_year` + `birth_month`
-- `has_income: false` but `income_streams` is non-empty → fix `has_income` to `true`
+- In a spec scenario: `household_size` not matching the number of members described → update to match
+- In a spec scenario: `birth_year`/`age` inconsistency → fix `birth_year` to match `age`
 
 **Flag for reviewer (note in changelog, don't change):**
 - Description quality / reading level concerns
@@ -487,7 +424,7 @@ Please check the ticket ID and try again.
 
 **Missing attachments:**
 ```
-Warning: Only found N of 3 expected files on {ticket-id}.
+Warning: Only found N of 2 expected files on {ticket-id}.
 Missing: [list missing file types]
 Proceeding with review of available files.
 ```
