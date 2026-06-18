@@ -1,6 +1,6 @@
 ---
 name: add-pe-program
-description: Implements a new PolicyEngine-based benefit program into benefits-api from a Linear ticket or local research files — research files, program class, dependency tests, validation, and PR.
+description: Implements a new PolicyEngine-based benefit program into benefits-api from a Linear ticket or local research files — research files, program class, dependency tests, spec-scenario verification against PolicyEngine, and PR.
 usage: /add-pe-program <ticket-id>
 example: /add-pe-program MFB-1234
 ---
@@ -9,7 +9,9 @@ example: /add-pe-program MFB-1234
 
 # Add PolicyEngine Program
 
-Implements a new PolicyEngine-based benefit program in the `benefits-api` repository. Takes a Linear ticket with program research and produces: research files (spec, initial config, test cases), a PolicyEngine program class, dependency test coverage, passing validations, and an open PR.
+Implements a new PolicyEngine-based benefit program in the `benefits-api` repository. Takes a Linear ticket with program research and produces: research files (spec, initial config), a PolicyEngine program class, dependency test coverage, the spec.md test scenarios verified against PolicyEngine, and an open PR.
+
+The research artifacts are two files — the spec.md and the initial config JSON. The spec.md **Test Scenarios** are the single source of truth for correctness; for a PE program they are verified by running each scenario's household through PolicyEngine and confirming it matches the spec. There is no separate validation `.json` artifact or importable validation suite. (Config-only federal programs have no spec and therefore no scenarios to run.)
 
 
 ## Phase 1: Gather Inputs
@@ -18,7 +20,7 @@ Ask the user how they want to provide the artifacts:
 
 > How would you like to provide the program files?
 > 1. **Linear ticket** — I'll fetch the attachments from a ticket ID
-> 2. **Local files** — Point me to the three files on disk
+> 2. **Local files** — Point me to the two files on disk
 
 ### Option 1: Linear Ticket
 
@@ -26,8 +28,8 @@ Ask the user how they want to provide the artifacts:
 2. Extract:
    - **Branch name** — from the `branchName` field on the issue object
    - **PolicyEngine variable name** — from the ticket description
-   - **Spec markdown**, **initial config JSON**, and **test cases JSON** — from ticket attachments
-     - If the MCP response includes attachment URLs, fetch them. All three files must be written exactly as-is from the attachment — do not summarize, paraphrase, or reformat any of them.
+   - **Spec markdown** and **initial config JSON** — from ticket attachments
+     - If the MCP response includes attachment URLs, fetch them. Both files must be written exactly as-is from the attachment — do not summarize, paraphrase, or reformat either of them.
      - If attachments can't be fetched automatically, ask the user to paste the file contents
 3. If any piece is still missing after attempting to extract it, prompt the user before continuing
 4. In `benefits-api/`, create or switch to the branch:
@@ -39,7 +41,7 @@ Ask the user how they want to provide the artifacts:
 
 ### Option 2: Local Files
 
-Ask the user for the paths to the three files. Read each one and confirm you have all three before proceeding.
+Ask the user for the paths to the two files. Read each one and confirm you have both before proceeding.
 
 ### After gathering inputs
 
@@ -63,7 +65,7 @@ Follow all steps in that skill — it covers how to run the command, interpret t
 
 Derive the **state** and **program name** (snake_case) from the ticket title or description.
 
-Write the following three files:
+Write the following two files:
 
 **Spec** — write the markdown from the ticket attachment exactly as-is:
 ```
@@ -75,16 +77,10 @@ benefits-api/programs/programs/{state}/{program}/spec.md
 benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
 ```
 
-**Test cases** — write the JSON from the ticket attachment exactly:
-```
-benefits-api/validations/management/commands/import_validations/data/{state}_{program}.json
-```
-
-After writing all three files, commit. Stage the specific files (not `git add .`/`-A`) so an auto-formatter doesn't sweep unrelated changes into the commit:
+After writing both files, commit. Stage the specific files (not `git add .`/`-A`) so an auto-formatter doesn't sweep unrelated changes into the commit:
 ```
 git add benefits-api/programs/programs/{state}/{program}/spec.md
 git add benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
-git add benefits-api/validations/management/commands/import_validations/data/{state}_{program}.json
 git commit -m "Add {state} {program} research files"
 ```
 
@@ -124,38 +120,29 @@ git commit -m "Add {state} {program} research files"
 
 Run all commands from the `benefits-api/` directory. Use `venv/bin/python` for all `manage.py` commands — `python` may not resolve in non-interactive shells.
 
+Correctness is verified by running the spec.md test scenarios against PolicyEngine and confirming they match — there is no separate validation suite to import or run.
+
 ### 5.1 Import the initial config (program stays inactive)
 
 Read `benefits-api/programs/management/commands/import_program_config.py` to understand the command's interface, then run it for the new config file.
 
 - If you encounter any errors during import, fix them and commit the fixes before continuing.
 
-### 5.2 Import the validations
+### 5.2 Run the spec scenarios against PolicyEngine
 
-Read `benefits-api/validations/management/commands/import_validations.py` to understand the command's interface, then run it for the new test case file.
+The spec.md **Test Scenarios** are the source of truth. Because a PE program resolves to `fraction × <PE variable>`, each scenario's household can be run directly through PolicyEngine (live API or a pinned local install) and compared to the spec's stated expected eligibility and value — you do not need our own validation suite to confirm correctness.
 
-- If you encounter any errors during import, fix them and commit the fixes before continuing.
+- Build each spec scenario's household, run the relevant PE variable(s), and record PE's output next to the spec's expected outcome.
+- **Flag every mismatch** — both value drift and eligibility flips — and resolve it (fix the implementation/config, or escalate a genuine PE bug as an `mfb-policy-engine` fix request).
+- Run **all** spec scenarios, not a selected subset.
 
-### 5.3 Run validations (program inactive)
+> Config-only federal programs have no spec.md, and therefore no scenarios to run — skip this step for them.
 
-Read `benefits-api/validations/management/commands/validate.py` to understand how to target a specific white label, then run validations for the program's white label.
-
-Verify:
-- The new program's validations appear as **skipped** (expected — program is inactive)
-- Note any other programs that are currently failing so you have a baseline
-
-### 5.4 Activate the program
+### 5.3 Activate the program
 
 Set `Program.active = True` for the new program. Read the `import_program_config` command to understand how activation works (Django shell, fixture, or admin).
 
-### 5.5 Re-run validations (program active)
-
-Run validations for the program's white label again.
-
-Verify and fix:
-- The new program's validations are **no longer skipped**
-- If any of the new program's validations are **failing** → fix the implementation and commit
-- If any **other** programs' validations are newly failing (compare against your Phase 5.3 baseline) → fix and commit
+After activating, re-confirm the spec scenarios still match PolicyEngine, and fix any regressions before continuing.
 
 ## Phase 6: "Already Have" Checkbox (Conditional)
 
@@ -250,5 +237,5 @@ Summarize the changes you made (files created, test results, PR link).
 
 Suggest these next steps in order:
 1. Review the PR and address any CodeRabbit feedback
-2. If fixes are needed, re-run validations to confirm they still pass
+2. If fixes are needed, re-run the spec scenarios against PolicyEngine to confirm they still match
 3. Run `/playwright-qa-execution {ticket-id}` locally to QA the program end-to-end

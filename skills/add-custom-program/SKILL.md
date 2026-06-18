@@ -1,18 +1,19 @@
 ---
 name: add-custom-program
-description: Implements a new custom ProgramCalculator in benefits-api from three research artifacts (initial_config.json, spec.md, validation .json). Use this skill whenever the user wants to implement a new benefit program with a custom calculator, add a program from a Linear ticket, or mentions implementing a program from research/discovery artifacts. Also use when the user says "add program", "implement calculator", or references a ticket with program research files.
+description: Implements a new custom ProgramCalculator in benefits-api from two research artifacts (initial_config.json, spec.md). Use this skill whenever the user wants to implement a new benefit program with a custom calculator, add a program from a Linear ticket, or mentions implementing a program from research/discovery artifacts. Also use when the user says "add program", "implement calculator", or references a ticket with program research files.
 ---
 
 <command-name>add-custom-program</command-name>
 
 # Add Custom Program Calculator
 
-Implements a new custom `ProgramCalculator` in `benefits-api` from three research artifacts produced during Discovery. Takes either a Linear ticket ID or local file paths as input.
+Implements a new custom `ProgramCalculator` in `benefits-api` from two research artifacts produced during Discovery. Takes either a Linear ticket ID or local file paths as input.
 
-The three artifacts are:
+The two artifacts are:
 - `[name_abbreviated]_initial_config.json` — program metadata, documents, navigators, warning messages
 - `[name_abbreviated]_spec.md` — eligibility criteria, benefit value methodology, test scenarios
-- `[name_abbreviated].json` — validation scenarios (household JSON + expected results)
+
+The spec.md test scenarios are the single source of truth for correctness: each scenario maps 1:1 to a unit test (Phase 4). There is no separate validation `.json` artifact or importable validation suite.
 
 ## Phase 1: Gather Inputs
 
@@ -20,21 +21,21 @@ Ask the user how they want to provide the artifacts:
 
 > How would you like to provide the program files?
 > 1. **Linear ticket** — I'll fetch the attachments from a ticket ID
-> 2. **Local files** — Point me to the three files on disk
+> 2. **Local files** — Point me to the two files on disk
 
 ### Option 1: Linear Ticket
 
 1. Fetch the ticket with `mcp__Linear__get_issue`
 2. Extract:
    - **Branch name** — from the `branchName` field on the issue object
-   - **Spec markdown**, **initial config JSON**, and **validation scenarios JSON** — from ticket attachments
-     - If the MCP response includes attachment URLs, fetch them. Write all three files exactly as-is — do not summarize, paraphrase, or reformat.
+   - **Spec markdown** and **initial config JSON** — from ticket attachments
+     - If the MCP response includes attachment URLs, fetch them. Write both files exactly as-is — do not summarize, paraphrase, or reformat.
      - If attachments can't be fetched automatically, ask the user to paste the file contents
 3. If any piece is missing, prompt the user before continuing
 
 ### Option 2: Local Files
 
-Ask the user for the paths to the three files. Read each one and confirm you have all three before proceeding.
+Ask the user for the paths to the two files. Read each one and confirm you have both before proceeding.
 
 ### After gathering inputs
 
@@ -48,7 +49,7 @@ Ask the user for the paths to the three files. Read each one and confirm you hav
 
 ## Phase 2: Place Research Files
 
-Write (or move) the three artifacts to their canonical locations in the repo:
+Write (or move) the two artifacts to their canonical locations in the repo:
 
 **Initial config:**
 ```
@@ -60,16 +61,10 @@ programs/management/commands/import_program_config_data/data/{state}_{program}_i
 programs/programs/{state}/{program}/spec.md
 ```
 
-**Validation scenarios:**
-```
-validations/management/commands/import_validations/data/{state}_{program}.json
-```
-
 Commit (stage specific files, not `git add .` or `git add -A`, to avoid picking up unrelated changes from auto-formatters):
 ```
 git add programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
 git add programs/programs/{state}/{program}/spec.md
-git add validations/management/commands/import_validations/data/{state}_{program}.json
 git commit -m "Add {state} {program} research files"
 ```
 
@@ -429,7 +424,11 @@ git add programs/programs/{state}/__init__.py
 git commit -m "Implement {ClassName} custom calculator"
 ```
 
-## Phase 4: Write Unit Tests
+## Phase 4: Write Unit Tests (spec scenarios → tests)
+
+The spec.md **Test Scenarios** section is the single source of truth for correctness. Write one unit test per spec scenario: each scenario becomes a test that asserts both the expected eligibility (eligible / ineligible) and, for eligible scenarios, the expected benefit value. There is no separate validation `.json` file to produce or import — these unit tests replace the retired importable validation suite. (You may also add a few **structural sanity tests** — calculator is registered, class constants are correct — which aren't spec scenarios; that's expected.)
+
+> **If you find a behavior worth testing that the spec doesn't cover (e.g. what happens when assets are blank, an untested boundary), that's a discovery gap, not just a test to add.** The spec was supposed to be complete before implementation. Add the test, AND back-fill the missing scenario into the spec.md so the spec stays the complete source of truth — then flag it (a quick note on the ticket) so discovery coverage improves. Do not let test coverage silently exceed the spec.
 
 Create `programs/programs/{state}/{program}/tests/__init__.py` and `programs/programs/{state}/{program}/tests/test_{program}.py`.
 
@@ -482,15 +481,16 @@ class TestMyProgram(TestCase):
 
 ### What to test
 
-Map your tests to the spec's eligibility criteria and benefit value section:
+The spec's **Test Scenarios** are the source for the tests: every scenario must have a corresponding unit test that asserts the scenario's expected eligibility and (when eligible) its expected value. In addition, map tests to the spec's eligibility criteria and benefit value section:
 
 1. **Class attributes** — verify registration in state calculators dict, correct class constants
 2. **Member eligibility** — each age/disability/pregnancy condition from the spec
 3. **Household eligibility** — income thresholds, location, expense checks, categorical bypasses
 4. **Benefit value** — each value tier or calculation path
-5. **Integration** — call `calc()` end-to-end for the main eligible/ineligible paths
+5. **Spec scenarios (1:1)** — one test per spec.md test scenario, asserting eligibility + value
+6. **Integration** — call `calc()` end-to-end for the main eligible/ineligible paths
 
-Use the spec's test scenarios as a guide for which cases to cover, but test at the unit level (individual methods), not as full household JSON scenarios.
+Use the spec's test scenarios as the basis for which cases to cover. Test at the unit level (individual methods or a constructed calculator), not as full household JSON validation scenarios run through an import command.
 
 ### Run the tests
 
@@ -508,9 +508,11 @@ git add programs/programs/{state}/{program}/tests/
 git commit -m "Add unit tests for {ClassName}"
 ```
 
-## Phase 5: Import and Validate
+## Phase 5: Import the Config and Activate
 
 Run all commands from the `benefits-api/` directory. Use `venv/bin/python` for all manage.py commands.
+
+Correctness is verified by the Phase 4 unit tests (which map 1:1 to the spec.md scenarios) — there is no separate validation suite to import or run. This phase only loads the program config and activates the program.
 
 ### 5.1 Import the initial config
 
@@ -518,28 +520,11 @@ Read `programs/management/commands/import_program_config.py` to understand the c
 
 Fix any import errors and commit fixes before continuing.
 
-### 5.2 Import the validations
+### 5.2 Activate the program
 
-Read `validations/management/commands/import_validations.py` to understand the command interface, then run it for the new validation file.
+Set `Program.active = True` for the new program (typically via the program's `initial_config.json` and re-importing, or per the import command's activation mechanism).
 
-Fix any import errors and commit fixes before continuing.
-
-### 5.3 Run validations (program inactive)
-
-Run validations for the program's white label. Verify:
-- The new program's validations appear as **skipped** (expected — program is inactive)
-- Note any other programs that are currently failing as a baseline
-
-### 5.4 Activate the program
-
-Set `Program.active = True` for the new program.
-
-### 5.5 Re-run validations (program active)
-
-Run validations again. Verify and fix:
-- The new program's validations are **no longer skipped**
-- If any of the new program's validations are **failing** — fix the calculator and commit
-- If any **other** programs' validations are newly failing (compare to 5.3 baseline) — fix and commit
+Then re-run the Phase 4 unit tests to confirm they still pass with the program active, and fix any failures before continuing.
 
 ## Phase 6: "Already Have" Screener Step (Conditional)
 
@@ -570,7 +555,7 @@ If you change this flag in the config, re-run the program config import so the `
 
 Summarize what was implemented:
 - Files created/modified
-- Test results (unit tests + validations)
+- Test results (unit tests, including the 1:1 spec-scenario tests)
 - Any data gaps or assumptions called out in the spec
 
 Suggest next steps:
