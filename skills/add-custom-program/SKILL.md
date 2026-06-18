@@ -426,7 +426,9 @@ git commit -m "Implement {ClassName} custom calculator"
 
 ## Phase 4: Write Unit Tests (spec scenarios → tests)
 
-The spec.md **Test Scenarios** section is the single source of truth for correctness. Write one unit test per spec scenario, mapping **1:1**: each scenario becomes a test that asserts both the expected eligibility (eligible / ineligible) and, for eligible scenarios, the expected benefit value. There is no separate validation `.json` file to produce or import — these unit tests replace the retired importable validation suite.
+The spec.md **Test Scenarios** section is the single source of truth for correctness. Write one unit test per spec scenario: each scenario becomes a test that asserts both the expected eligibility (eligible / ineligible) and, for eligible scenarios, the expected benefit value. There is no separate validation `.json` file to produce or import — these unit tests replace the retired importable validation suite. (You may also add a few **structural sanity tests** — calculator is registered, class constants are correct — which aren't spec scenarios; that's expected.)
+
+> **If you find a behavior worth testing that the spec doesn't cover (e.g. what happens when assets are blank, an untested boundary), that's a discovery gap, not just a test to add.** The spec was supposed to be complete before implementation. Add the test, AND back-fill the missing scenario into the spec.md so the spec stays the complete source of truth — then flag it (a quick note on the ticket) so discovery coverage improves. Do not let test coverage silently exceed the spec.
 
 Create `programs/programs/{state}/{program}/tests/__init__.py` and `programs/programs/{state}/{program}/tests/test_{program}.py`.
 

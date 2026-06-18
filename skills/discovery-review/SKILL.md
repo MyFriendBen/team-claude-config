@@ -219,10 +219,13 @@ For each numbered criterion:
 
 Check all test scenarios in the spec for:
 
-1. **Coverage:** Do they cover all major branches of eligibility logic? At minimum:
+1. **Coverage must be COMPLETE — this is discovery's job, not the dev's.** The spec scenarios are the single source of truth a dev (or the workflow) turns directly into tests; if a scenario is missing, the behavior goes untested. Do NOT rely on the dev to discover missing edge cases during implementation — that's a discovery failure. Verify the scenarios cover, at minimum:
    - One clearly eligible "golden path" case
    - One clearly ineligible case per major criterion
-   - At least one edge case (boundary value, multi-member household, mixed eligibility)
+   - **Every boundary** (at the limit, one over, well over), not just one example
+   - **Every data-gap / inclusivity assumption** exercised (e.g. a household with the relevant field *missing/blank* — what happens when assets, age, or income aren't provided?)
+   - Multi-member / mixed-eligibility and any categorical-bypass path
+   - Walk each eligibility criterion and each value tier and ask "is there a scenario that would fail if this were implemented wrong?" If not, add one.
 
 2. **Consistency with eligibility criteria:**
    - Do scenario outcomes match the criteria? (e.g., if criterion says income must be below 200% FPL, does the ineligible scenario have income above that threshold?)
