@@ -1,18 +1,17 @@
 ---
 name: add-custom-program
-description: Implements a new custom ProgramCalculator in benefits-api from three research artifacts (initial_config.json, spec.md, validation .json). Use this skill whenever the user wants to implement a new benefit program with a custom calculator, add a program from a Linear ticket, or mentions implementing a program from research/discovery artifacts. Also use when the user says "add program", "implement calculator", or references a ticket with program research files.
+description: Implements a new custom ProgramCalculator in benefits-api from two research artifacts (initial_config.json, spec.md). Use this skill whenever the user wants to implement a new benefit program with a custom calculator, add a program from a Linear ticket, or mentions implementing a program from research/discovery artifacts. Also use when the user says "add program", "implement calculator", or references a ticket with program research files.
 ---
 
 <command-name>add-custom-program</command-name>
 
 # Add Custom Program Calculator
 
-Implements a new custom `ProgramCalculator` in `benefits-api` from three research artifacts produced during Discovery. Takes either a Linear ticket ID or local file paths as input.
+Implements a new custom `ProgramCalculator` in `benefits-api` from two research artifacts produced during Discovery. Takes either a Linear ticket ID or local file paths as input.
 
-The three artifacts are:
+The two artifacts are:
 - `[name_abbreviated]_initial_config.json` — program metadata, documents, navigators, warning messages
 - `[name_abbreviated]_spec.md` — eligibility criteria, benefit value methodology, test scenarios
-- `[name_abbreviated].json` — validation scenarios (household JSON + expected results)
 
 ## Phase 1: Gather Inputs
 
@@ -20,21 +19,21 @@ Ask the user how they want to provide the artifacts:
 
 > How would you like to provide the program files?
 > 1. **Linear ticket** — I'll fetch the attachments from a ticket ID
-> 2. **Local files** — Point me to the three files on disk
+> 2. **Local files** — Point me to the two files on disk
 
 ### Option 1: Linear Ticket
 
 1. Fetch the ticket with `mcp__Linear__get_issue`
 2. Extract:
    - **Branch name** — from the `branchName` field on the issue object
-   - **Spec markdown**, **initial config JSON**, and **validation scenarios JSON** — from ticket attachments
-     - If the MCP response includes attachment URLs, fetch them. Write all three files exactly as-is — do not summarize, paraphrase, or reformat.
+   - **Spec markdown** and **initial config JSON** — from ticket attachments
+     - If the MCP response includes attachment URLs, fetch them. Write both files exactly as-is — do not summarize, paraphrase, or reformat.
      - If attachments can't be fetched automatically, ask the user to paste the file contents
 3. If any piece is missing, prompt the user before continuing
 
 ### Option 2: Local Files
 
-Ask the user for the paths to the three files. Read each one and confirm you have all three before proceeding.
+Ask the user for the paths to the two files. Read each one and confirm you have both before proceeding.
 
 ### After gathering inputs
 
@@ -48,7 +47,7 @@ Ask the user for the paths to the three files. Read each one and confirm you hav
 
 ## Phase 2: Place Research Files
 
-Write (or move) the three artifacts to their canonical locations in the repo:
+Write (or move) the two artifacts to their canonical locations in the repo:
 
 **Initial config:**
 ```
@@ -60,16 +59,10 @@ programs/management/commands/import_program_config_data/data/{state}_{program}_i
 programs/programs/{state}/{program}/spec.md
 ```
 
-**Validation scenarios:**
-```
-validations/management/commands/import_validations/data/{state}_{program}.json
-```
-
 Commit (stage specific files, not `git add .` or `git add -A`, to avoid picking up unrelated changes from auto-formatters):
 ```
 git add programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
 git add programs/programs/{state}/{program}/spec.md
-git add validations/management/commands/import_validations/data/{state}_{program}.json
 git commit -m "Add {state} {program} research files"
 ```
 
@@ -431,6 +424,8 @@ git commit -m "Implement {ClassName} custom calculator"
 
 ## Phase 4: Write Unit Tests
 
+The `spec.md` is the source of truth for test coverage. **Every scenario it describes — each eligibility criterion, benefit-value path, edge case, and every entry in its Test Scenarios section — must be captured by a unit test.** Aim for full coverage of the calculator: no branch in the code and no scenario in the spec should go untested. This is not optional polish; the tests are how we guarantee the calculator matches the spec now that per-program validations no longer run.
+
 Create `programs/programs/{state}/{program}/tests/__init__.py` and `programs/programs/{state}/{program}/tests/test_{program}.py`.
 
 ### Test structure
@@ -490,7 +485,7 @@ Map your tests to the spec's eligibility criteria and benefit value section:
 4. **Benefit value** — each value tier or calculation path
 5. **Integration** — call `calc()` end-to-end for the main eligible/ineligible paths
 
-Use the spec's test scenarios as a guide for which cases to cover, but test at the unit level (individual methods), not as full household JSON scenarios.
+Work through the spec's Test Scenarios section item by item and add a test for each one — every scenario must have a corresponding test. Test at the unit level (individual methods), not as full household JSON scenarios. If a scenario can't be expressed as a unit test, note why in a comment rather than silently dropping it.
 
 ### Run the tests
 
@@ -499,7 +494,7 @@ Use the virtualenv python — `python` may not resolve in non-interactive shells
 venv/bin/python manage.py test programs.programs.{state}.{program} --no-input
 ```
 
-Fix any failures before proceeding.
+**Every unit test must pass before proceeding** — this step is not complete until the full suite for the new program is green. Fix the calculator (or the test, if the test is wrong) and re-run until there are zero failures.
 
 ### Commit
 
@@ -508,7 +503,7 @@ git add programs/programs/{state}/{program}/tests/
 git commit -m "Add unit tests for {ClassName}"
 ```
 
-## Phase 5: Import and Validate
+## Phase 5: Import and Activate
 
 Run all commands from the `benefits-api/` directory. Use `venv/bin/python` for all manage.py commands.
 
@@ -518,28 +513,9 @@ Read `programs/management/commands/import_program_config.py` to understand the c
 
 Fix any import errors and commit fixes before continuing.
 
-### 5.2 Import the validations
-
-Read `validations/management/commands/import_validations.py` to understand the command interface, then run it for the new validation file.
-
-Fix any import errors and commit fixes before continuing.
-
-### 5.3 Run validations (program inactive)
-
-Run validations for the program's white label. Verify:
-- The new program's validations appear as **skipped** (expected — program is inactive)
-- Note any other programs that are currently failing as a baseline
-
-### 5.4 Activate the program
+### 5.2 Activate the program
 
 Set `Program.active = True` for the new program.
-
-### 5.5 Re-run validations (program active)
-
-Run validations again. Verify and fix:
-- The new program's validations are **no longer skipped**
-- If any of the new program's validations are **failing** — fix the calculator and commit
-- If any **other** programs' validations are newly failing (compare to 5.3 baseline) — fix and commit
 
 ## Phase 6: "Already Have" Screener Step (Conditional)
 
@@ -570,7 +546,7 @@ If you change this flag in the config, re-run the program config import so the `
 
 Summarize what was implemented:
 - Files created/modified
-- Test results (unit tests + validations)
+- Test results (unit tests)
 - Any data gaps or assumptions called out in the spec
 
 Suggest next steps:
