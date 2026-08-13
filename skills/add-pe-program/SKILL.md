@@ -37,12 +37,14 @@ Ask the user how they want to provide the artifacts:
 
 ### Option 2: Local Files
 
-Ask the user for the paths to the two files. Read each one and confirm you have both before proceeding.
+1. Ask for the paths to the two files. Read each one and confirm you have both before proceeding.
+2. Ask for the **branch name** — there is no ticket to derive one from, so it has to be supplied.
+3. Ask for a **Linear ticket ID**, and say it's optional. With no ticket: skip Phase 9 (nowhere to post QA scenarios), omit the ticket link from the PR body in Phase 8, and drop the `/api-qa-execution` step from Phase 10.
 
 ### After gathering inputs
 
 1. Derive the **state** (e.g. `tx`, `co`, `il`) and **program name** (snake_case) from the config's `white_label.code` and `program.name_abbreviated`, and the **PolicyEngine variable name** from the ticket or spec.
-2. In `benefits-api/`, create or switch to the feature branch (use the ticket's `branchName` when there is one):
+2. In `benefits-api/`, create or switch to the feature branch (the ticket's `branchName` under Option 1, the name you collected under Option 2):
    ```bash
    git checkout -b {branch-name}
    # or if the branch already exists:
@@ -61,13 +63,16 @@ No matching variable → halt. There is no data source to build a PE calculator 
 
 ### 2.2 Does PolicyEngine supply *everything* the spec describes?
 
-Read the spec's eligibility criteria and benefit-value methodology against what the PE variable actually computes. There are exactly three outcomes:
+Read the spec's eligibility criteria and benefit-value methodology against what the PE variable actually computes.
+
+**Resolve any gap before picking a row.** A gap is not by itself a verdict: an input dependency may close it, PolicyEngine may agree to model it, or the user may descope it — each of those keeps the program a PE program. Work the halt-and-report step below first, and only pick a row once nothing is outstanding.
 
 | Outcome | What you write |
 |---|---|
 | **Federal PE program** | A class in `programs/programs/federal/pe/{member,spm,tax}.py` — wiring attributes only |
 | **State PE program** | A subclass of the federal class in `programs/programs/{state}/pe/{member,spm,tax}.py`, adding only the state-code dependency and any state-specific inputs |
-| **Neither** | Nothing here. Halt and hand off to `/add-custom-program` as a full custom calculator |
+| **Neither** — a gap the user has decided PolicyEngine won't close | Nothing here. Halt and hand off to `/add-custom-program` as a full custom calculator |
+| **Unresolved** | No row applies yet. Stay halted; don't route an input-solvable gap to `/add-custom-program` |
 
 **The allowed surface of a PE calculator** — class attributes and nothing else:
 
@@ -109,11 +114,17 @@ benefits-api/programs/management/commands/import_program_config_data/data/{state
 
 > A pure federal passthrough with no state-level divergence has no `spec.md` and no Test Scenarios ticket comment — it is config only (the `ks_ssi` precedent). In that case write just the config file, and in Phase 5 write a single smoke test instead of a scenario suite.
 
-After writing both files, commit. Stage the specific files (not `git add .`/`-A`) so an auto-formatter doesn't sweep unrelated changes into the commit:
+After writing the file(s), commit. Stage the specific files (not `git add .`/`-A`) so an auto-formatter doesn't sweep unrelated changes into the commit:
 ```bash
 git add benefits-api/programs/programs/{state}/{program}/spec.md
 git add benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
 git commit -m "Add {state} {program} research files"
+```
+
+For a config-only federal passthrough there is no `spec.md`, so stage the config alone — `git add` fails on a path that doesn't exist:
+```bash
+git add benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
+git commit -m "Add {state} {program} config"
 ```
 
 ## Phase 4: Implement the Program
