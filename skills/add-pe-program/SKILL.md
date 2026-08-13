@@ -155,7 +155,7 @@ Write **one test per `## Test Scenarios` entry** in the program's `spec.md`, ass
 
 Read `benefits-api/docs/TESTING.md` ("PolicyEngine Spec-Scenario Tests") and the helper module before writing:
 ```
-benefits-api/programs/programs/policyengine/tests/spec_scenarios.py
+benefits-api/programs/programs/policyengine/tests/integration_test_helpers.py
 ```
 
 ### 5.1 Write the tests
@@ -169,15 +169,15 @@ benefits-api/programs/programs/{state}/{program}/tests/test_{program}.py
 ```python
 import pytest
 from programs.programs.{state}.pe.member import {State}{Program}
-from programs.programs.policyengine.tests.spec_scenarios import (
-    PeSpecScenarioTestCase, add_income, add_member, calc_pe_program, make_program, make_screen,
+from programs.programs.policyengine.tests.integration_test_helpers import (
+    PeIntegrationTestCase, add_income, add_member, calc_pe_program, make_program, make_screen,
     screener_value,
 )
 
 
 @pytest.mark.integration                      # applies VCR — without it the test hits PE live every run
-class Test{State}{Program}(PeSpecScenarioTestCase):
-    pe_version = "1.779.3"                    # exact version these cassettes were recorded at
+class Test{State}{Program}(PeIntegrationTestCase):
+    pe_version = "1.784.3"                    # exact version these cassettes were recorded at
 
     def test_scenario_1_{short_scenario_name}(self):
         """Scenario 1 from spec.md: {one-line restatement}."""
@@ -207,11 +207,13 @@ Run with `pytest`, **never** `venv/bin/python manage.py test` — VCR is a pytes
 
 ```bash
 # Record. Needs POLICY_ENGINE_CLIENT_ID / POLICY_ENGINE_CLIENT_SECRET in .env
-VCR_MODE=once venv/bin/pytest programs/programs/{state}/{program}/tests/ -v
+PE_RECORD=1 VCR_MODE=once venv/bin/pytest programs/programs/{state}/{program}/tests/ -v
 
 # Prove every scenario replays with no network
 VCR_MODE=none venv/bin/pytest programs/programs/{state}/{program}/tests/ -q
 ```
+
+`PE_RECORD=1` is what permits the live auth call; without it every run seeds a placeholder token and no recording can succeed. Leave it off for the replay command, and off in normal work.
 
 Both commands must be green before moving on. A failed recording never writes a cassette, so if recording fails, fix the cause and re-run.
 
