@@ -37,7 +37,11 @@ Ask the user how they want to provide the artifacts:
 
 ### Option 2: Local Files
 
-1. Ask for the paths to the two files. Read each one and confirm you have both before proceeding.
+1. Ask whether this is a spec-backed program or a config-only federal passthrough (the `ks_ssi` precedent — see Phase 3).
+   - **Spec-backed** — ask for the paths to both the `spec.md` and the initial config JSON.
+   - **Config-only** — ask for the initial config JSON path alone, and ask for the **PolicyEngine variable name** directly. With no ticket and no spec there is no other source for it.
+
+   Read each file you were given and confirm it before proceeding.
 2. Ask for the **branch name** — there is no ticket to derive one from, so it has to be supplied.
 3. Ask for a **Linear ticket ID**, and say it's optional. With no ticket: skip Phase 9 (nowhere to post QA scenarios), omit the ticket link from the PR body in Phase 8, and drop the `/api-qa-execution` step from Phase 10.
 
@@ -103,12 +107,12 @@ Do not write a partial override while waiting for that decision.
 Write the following two files:
 
 **Spec** — write the markdown from the ticket attachment exactly as-is:
-```
+```text
 benefits-api/programs/programs/{state}/{program}/spec.md
 ```
 
 **Initial config** — write the JSON from the ticket attachment exactly:
-```
+```text
 benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
 ```
 
@@ -130,13 +134,13 @@ git commit -m "Add {state} {program} config"
 ## Phase 4: Implement the Program
 
 1. **Read the PolicyEngine variable** to understand the formula and its inputs:
-   ```
+   ```text
    ../policyengine-us/policyengine_us/variables/{path_to_variable}.py
    ```
    Use the variable name from the ticket to find the file (e.g. `head_start` → search for it under `variables/`).
 
 2. **Read existing PE program classes** to understand the implementation pattern:
-   ```
+   ```text
    benefits-api/programs/programs/{state}/pe/member.py
    ```
    If this file doesn't exist yet, find a similar state's `pe/member.py` to use as a reference. `TxHeadStart` and `TxSsi` in `programs/programs/tx/pe/member.py` are the canonical shape of a state PE subclass: inherit the federal class, add the state-code dependency, add nothing else.
@@ -144,11 +148,11 @@ git commit -m "Add {state} {program} config"
 3. **Add the new program class**, staying inside the allowed surface from Phase 2. If while writing it you find you need a conditional, a dollar figure, or a helper that reads the screen, stop — you've hit the Phase 2 gate late. Go back and report it.
 
 4. **Ensure test coverage for the calculator's dependencies.** Review:
-   ```
+   ```text
    benefits-api/programs/programs/policyengine/calculators/dependencies/
    ```
    Add any missing tests for dependencies your program class relies on:
-   ```
+   ```text
    benefits-api/programs/programs/policyengine/calculators/dependencies/tests/test_member.py
    ```
    These stay plain unit tests over the assembled payload — no `integration` marker, no cassette.
@@ -165,14 +169,14 @@ git commit -m "Add {state} {program} config"
 Write **one test per `## Test Scenarios` entry** in the program's `spec.md`, asserting eligibility *and* benefit value. The spec is the source of truth: don't invent tests outside it, and don't drop scenarios that are in it. If implementing the program revealed a scenario the spec is missing, back-fill it into `spec.md` and flag it on the ticket — an automated check watches for drift between the spec and the codified tests.
 
 Read `benefits-api/docs/TESTING.md` ("PolicyEngine Spec-Scenario Tests") and the helper module before writing:
-```
+```text
 benefits-api/programs/programs/policyengine/tests/integration_test_helpers.py
 ```
 
 ### 5.1 Write the tests
 
 Location:
-```
+```text
 benefits-api/programs/programs/{state}/{program}/tests/__init__.py
 benefits-api/programs/programs/{state}/{program}/tests/test_{program}.py
 ```
@@ -306,7 +310,7 @@ Opening the PR is part of this workflow — always complete this phase.
 1. Read `benefits-api/programs/programs/{state}/{program}/spec.md`
 2. Extract the **Test Scenarios** section verbatim — everything from the `## Test Scenarios` heading to the end of the file (or the next top-level `##` heading, whichever comes first). Include any values back-filled in Phase 5.3.
 3. Post it as a comment on the Linear ticket:
-   ```
+   ```text
    mcp__linear-server__save_comment(issue_id="{ticket-id}", body="{test scenarios section}")
    ```
    The comment body must be the extracted markdown exactly as written — no reformatting, no summarizing.
