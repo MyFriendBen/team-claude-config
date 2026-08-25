@@ -18,7 +18,7 @@ Implements a new PolicyEngine-based benefit program in the `benefits-api` reposi
 
 ## Where things live
 
-**Read `benefits-api/programs/framework/README.md` first.** It is the maintained source of truth for this layout; the paths below are a summary and the README wins any disagreement. Do not trust remembered paths — this tree has been restructured before.
+**Read `benefits-api/programs/framework/README.md` first.** It is the maintained source of truth for this layout; the paths below are a summary and the README wins any disagreement. Do not trust remembered paths — this tree has been restructured before. Verify a concrete path exists before relying on it: the README has drifted at least once (it lists a `framework/helpers.py` that is not in the tree).
 
 Two layouts, chosen by whether other white labels have the same program:
 
@@ -92,7 +92,7 @@ This is a **hard gate** with two questions. Answer both before writing any imple
 
 ### 2.1 Does PolicyEngine expose a variable?
 
-**Probe the live private API.** There is no metadata endpoint on `household.api` and no `check_pe_support` management command in this repo — `/check-pe-support` describes a command that does not exist. Ask PolicyEngine for the variable directly instead. This is a better gate anyway: one call confirms the variable exists, which **entity** owns it, and what it returns at the version we would actually ship.
+**Probe the live private API.** There is no metadata endpoint on `household.api`, so asking PolicyEngine to compute the variable *is* the check — one call confirms it exists, which **entity** owns it, and what it returns at the version we would actually ship. `/check-pe-support` now walks through exactly this, including the period determination in step 5; run it, or inline the probe below.
 
 Never probe `api.policyengine.org` — it ignores the `version` field, so its answers aren't comparable to ours.
 

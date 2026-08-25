@@ -13,6 +13,30 @@ The two artifacts are:
 - `[name_abbreviated]_initial_config.json` — program metadata, documents, navigators, warning messages
 - `[name_abbreviated]_spec.md` — eligibility criteria, benefit value methodology, test scenarios
 
+## Where things live
+
+**Read `benefits-api/programs/framework/README.md` first.** It is the maintained source of truth for this layout;
+what follows is a summary and the README wins any disagreement. Do not trust remembered paths — this tree has been
+restructured before, and the paths in this skill were wrong for months because of it. Verify a concrete path exists before relying on it: the README has drifted at least once (it lists a `framework/helpers.py` that is not in the tree).
+
+A custom calculator goes in one of two places, chosen by whether other white labels have the same program:
+
+| | State-only program (the usual case here) | Program shared across white labels |
+|---|---|---|
+| Calculator | `programs/programs/white_labels/{state}/{program}/calculator.py` | `programs/programs/cross_white_label/{family}/{state}.py` |
+| Spec | `white_labels/{state}/{program}/spec.md` | `cross_white_label/{family}/specs/{state}.md` |
+| Tests | `white_labels/{state}/{program}/tests/` | `cross_white_label/{family}/tests/test_{state}.py` |
+
+Everything else:
+
+| What | Where |
+|---|---|
+| Base classes | `programs/framework/base.py` — `ProgramCalculator`, `Eligibility`, `MemberEligibility` |
+| Condition messages | `programs/framework/eligibility_messages.py` (imported as `import programs.framework.eligibility_messages as messages`) |
+| Registry | `programs/framework/registry.py` — walks the package; **not a file you edit** (see 3.4) |
+| External clients | `integrations/clients/` — e.g. `from integrations.clients.hud_income_limits import hud_client, HudIncomeClientError` |
+| Initial config | `programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json` |
+
 ## Phase 1: Gather Inputs
 
 Ask the user how they want to provide the artifacts:
@@ -56,13 +80,13 @@ programs/management/commands/import_program_config_data/data/{state}_{program}_i
 
 **Spec:**
 ```
-programs/programs/{state}/{program}/spec.md
+programs/programs/white_labels/{state}/{program}/spec.md
 ```
 
 Commit (stage specific files, not `git add .` or `git add -A`, to avoid picking up unrelated changes from auto-formatters):
 ```
 git add programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
-git add programs/programs/{state}/{program}/spec.md
+git add programs/programs/white_labels/{state}/{program}/spec.md
 git commit -m "Add {state} {program} research files"
 ```
 
@@ -74,25 +98,26 @@ This is the core implementation step. Read the spec.md carefully — it contains
 
 Before writing any code, read 2–3 existing calculators to absorb the project's conventions. Good references by complexity:
 
-- **Simple** (fixed value, 1–2 conditions): `programs/programs/co/cash_back/calculator.py`
-- **Medium** (FPL income test, member + household conditions): `programs/programs/tx/ccad/calculator.py`
-- **Complex** (categorical eligibility, date ranges, pregnancy): `programs/programs/federal/trump_account/calculator.py`
+- **Simple** (fixed value, one income-band condition): `programs/programs/white_labels/co/erc/calculator.py`
+- **Medium** (FPL income test, member + household conditions): `programs/programs/white_labels/tx/ccad/calculator.py`
+- **Complex** (categorical eligibility, date ranges, pregnancy): `programs/programs/white_labels/federal/trump_account/calculator.py`
 
 Also read:
-- `programs/programs/calc.py` — the base `ProgramCalculator` class, `Eligibility`, `MemberEligibility`
-- `programs/programs/messages.py` — message helpers for conditions (income, location, age, etc.)
-- The state's existing `__init__.py` to see how calculators are registered
+- `programs/framework/base.py` — the base `ProgramCalculator` class, `Eligibility`, `MemberEligibility`
+- `programs/framework/eligibility_messages.py` — message helpers for conditions (income, location, age, etc.)
+- `programs/framework/registry.py` — how a calculator gets registered (it isn't a file you edit; see 3.4)
+- A sibling's `tests/` directory, for the test conventions Phase 4 expects
 
 ### 3.2 Create the calculator directory
 
 ```bash
-mkdir -p programs/programs/{state}/{program}
-touch programs/programs/{state}/{program}/__init__.py
+mkdir -p programs/programs/white_labels/{state}/{program}
+touch programs/programs/white_labels/{state}/{program}/__init__.py
 ```
 
 ### 3.3 Write the calculator
 
-Create `programs/programs/{state}/{program}/calculator.py`.
+Create `programs/programs/white_labels/{state}/{program}/calculator.py`.
 
 The calculator is a subclass of `ProgramCalculator`. Map spec criteria to overrides:
 
@@ -170,7 +195,7 @@ e.condition(gross_income <= income_limit, messages.income(gross_income, income_l
 
 **Income checks — AMI-based (housing programs):**
 ```python
-from integrations.services.hud_client import hud_client, HudIncomeClientError
+from integrations.clients.hud_income_limits import hud_client, HudIncomeClientError
 try:
     ami_limit = hud_client.get_screen_il_ami(self.screen, "80%")
     e.condition(gross_income <= ami_limit, messages.income(gross_income, ami_limit))
@@ -332,6 +357,17 @@ When calling `calc_gross_income(frequency, types)`, the `types` list uses these 
 
 Note the camelCase conventions — `"sSI"`, `"sSDisability"`, and `"sSRetirement"` all start with lowercase `s`. These are the actual database values, not display names. Using the wrong token (e.g. `"socialSecurity"` instead of `"sSRetirement"`) will silently return 0 and produce incorrect eligibility results.
 
+### Never let a computed value land on $0
+
+`Eligibility.value` drives two independent filters, and `$0` fails both: the API reports the program **not eligible**,
+and the frontend drops it again on `programValue(program) > 0`
+(`benefits-calculator/src/Components/Results/Filter/filterPrograms.ts`). A household that genuinely qualifies but
+whose net value works out to zero — a benefit fully offset by a premium or copay, say — would be hidden from exactly
+the people it applies to.
+
+So if the spec's value formula can reach zero or go negative for an eligible household, floor it at `1` rather than
+`0`, and amend the spec scenario to match. Only floor at `0` when reaching zero genuinely means "not eligible".
+
 ### Benefit value units — ALWAYS annual
 
 **All benefit amounts stored in the calculator must be annual (yearly) values, not monthly.**
@@ -384,7 +420,7 @@ List every screener field the calculator reads. Common values: `"age"`, `"income
 
 ### Messages
 
-Every `e.condition()` call in `household_eligible` should include a message from `programs.programs.messages`. Member-level conditions typically omit the message.
+Every `e.condition()` call in `household_eligible` should include a message from `programs.framework.eligibility_messages`. Member-level conditions typically omit the message.
 
 Available helpers: `income(income, max_income)`, `income_range(income, min_income, max_income)`, `income_limit_unknown()`, `location()`, `older_than(min_age)`, `child(min_age, max_age)`, `adult(min_age, max_age)`, `assets(asset_limit)`, `must_have_benefit(name)`, `must_not_have_benefit(name)`, `has_disability()`, `has_no_insurance()`, `is_pregnant()`, `presumed_eligibility()`.
 
@@ -399,26 +435,33 @@ Always guard against `None` for optional fields before using them in comparisons
 
 Write a concise docstring on the calculator class — what the program is, who it serves, any data gaps or nuances from the spec.
 
-### 3.4 Register the calculator
+### 3.4 Registration is automatic — declare `program_code`
 
-Add the import and registry entry to `programs/programs/{state}/__init__.py`:
+**Do not hand-edit any registry.** `programs/framework/registry.py` walks `programs.programs` and reads the key
+off each class it finds, so writing the file registers the calculator. The per-state `{state}_calculators` dicts
+are gone — `programs/programs/white_labels/{state}/__init__.py` is empty by design.
+
+Every calculator must declare exactly one of the following. **Declaring neither raises `UnregisteredCalculator`
+at import**, which takes the app down rather than quietly leaving the calculator unreachable — silence would read
+the same whether the class is a base or whether someone forgot the key, so it is rejected instead of guessed at:
 
 ```python
-from .{program}.calculator import {ClassName}
+class MyProgram(ProgramCalculator):
+    program_code = "{name_abbreviated}"   # the Program.name_abbreviated row this backs
 
-{state}_calculators: dict[str, type[ProgramCalculator]] = {
-    # ... existing entries ...
-    "{name_abbreviated}": {ClassName},  # key must match name_abbreviated exactly
-}
+class MyBase(ProgramCalculator, abstract=True):
+    ...                                   # exists to be subclassed, backs no row
 ```
 
-If this is the first calculator for a new state, also add the state's calculator dict to `programs/programs/__init__.py`.
+`abstract=True` is a class keyword read by `__init_subclass__` at class creation rather than an attribute, so it
+cannot drift from the class it describes. Subclassing an abstract base does **not** make the subclass abstract, and
+a class may both declare a code and be subclassed. Two classes claiming the same key raise `DuplicateRegistryKey`
+at import rather than resolving to whichever is found second.
 
 ### 3.5 Commit
 
 ```
-git add programs/programs/{state}/{program}/
-git add programs/programs/{state}/__init__.py
+git add programs/programs/white_labels/{state}/{program}/
 git commit -m "Implement {ClassName} custom calculator"
 ```
 
@@ -426,13 +469,13 @@ git commit -m "Implement {ClassName} custom calculator"
 
 The `spec.md` is the source of truth for test coverage. **Every scenario it describes — each eligibility criterion, benefit-value path, edge case, and every entry in its Test Scenarios section — must be captured by a unit test.** Aim for full coverage of the calculator: no branch in the code and no scenario in the spec should go untested. This is not optional polish; the tests are how we guarantee the calculator matches the spec now that per-program validations no longer run.
 
-Create `programs/programs/{state}/{program}/tests/__init__.py` and `programs/programs/{state}/{program}/tests/test_{program}.py`.
+Create `programs/programs/white_labels/{state}/{program}/tests/__init__.py` and `programs/programs/white_labels/{state}/{program}/tests/test_{program}.py`.
 
 ### Test structure
 
 Study the test patterns from existing calculators before writing tests. Good references:
-- `programs/programs/tx/hse/tests/test_tx_hse.py` — mock-based, tests household eligibility + value tiers
-- `programs/programs/tx/ccad/tests/test_ccad.py` — mock-based, tests member eligibility + categorical bypass
+- `programs/programs/white_labels/tx/hse/tests/test_tx_hse.py` — mock-based, tests household eligibility + value tiers
+- `programs/programs/white_labels/tx/ccad/tests/test_ccad.py` — mock-based, tests member eligibility + categorical bypass
 
 The project uses two testing styles — pick the one that matches the calculator's complexity:
 
@@ -440,7 +483,7 @@ The project uses two testing styles — pick the one that matches the calculator
 ```python
 from django.test import TestCase
 from unittest.mock import Mock
-from programs.programs.calc import ProgramCalculator, Eligibility, MemberEligibility
+from programs.framework.base import ProgramCalculator, Eligibility, MemberEligibility
 
 def make_member(age=40, disabled=False, ...):
     member = Mock()
@@ -499,7 +542,7 @@ venv/bin/python manage.py test programs.programs.{state}.{program} --no-input
 ### Commit
 
 ```
-git add programs/programs/{state}/{program}/tests/
+git add programs/programs/white_labels/{state}/{program}/tests/
 git commit -m "Add unit tests for {ClassName}"
 ```
 
@@ -533,7 +576,7 @@ There is nothing to *build* here — only a decision to make and confirm in the 
    ```
    A hit means another calculator reads this benefit's state (directly, via `has_base_benefit`, or through a `presumptive_eligibility` / `categorically_eligible` list) → it needs `show_in_has_benefits_step: true`. **But no hit is not proof it's unneeded** — the program is new, so nothing could have referenced it yet. Always also do check #2.
 
-2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies that were somehow written ahead of it — usually none. This check looks for gaps: does receiving this new program categorically/presumptively qualify a household for one of our existing programs? Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (e.g. via `programs/programs/{state}/` and the program config). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
+2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies that were somehow written ahead of it — usually none. This check looks for gaps: does receiving this new program categorically/presumptively qualify a household for one of our existing programs? Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (e.g. via `programs/programs/white_labels/{state}/`, `programs/programs/cross_white_label/`, and the program config). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
 
 Then:
 
