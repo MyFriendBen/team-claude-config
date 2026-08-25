@@ -95,11 +95,17 @@ Are you sure you want to proceed? (yes/no)
    ```
    Then read the file with the Read tool. If the URL has expired (Linear signed URLs are short-lived), re-fetch the ticket to get a fresh URL. If it still can't be fetched, ask the user to paste the spec contents.
 
-   b. ***If running in the `staging` or `production` environment*** - Find the spec in the local directory. These spec files should live in the `/programs/programs` directory and should follow this naming convention for the whitelabel and program name: `/{whitelabel}/{program_name_in_snake_case}/spec.md`. Determine the name of the program using the linear ticket name and determine the best match.
-   
+   b. ***If running in the `staging` or `production` environment*** - Find the spec in the local directory. Specs live under `programs/programs/` in one of two shapes, depending on whether the program is state-only or shared across white labels. Determine the program from the Linear ticket name and take the best match; if the first shape misses, try the second before giving up.
+
+   - State-only: `programs/programs/white_labels/{whitelabel}/{program_snake_case}/spec.md`
+   - Shared across white labels: `programs/programs/cross_white_label/{family}/specs/{whitelabel}.md`
+
    Examples:
-   - `programs/programs/co/collegeinvest_first_step/spec.md`
-   - `programs/programs/wa/orca_lift/spec.md`
+   - `programs/programs/white_labels/co/collegeinvest_first_step/spec.md`
+   - `programs/programs/white_labels/wa/orca_lift/spec.md`
+   - `programs/programs/cross_white_label/medicaid/chip/specs/ks.md`
+
+   A plain `find programs/programs -name 'spec.md' -o -path '*specs/*.md'` is the fastest way to resolve one when the shape is unclear.
 
    If you cannot find the spec, ask the user if they want to pull down the latest changes from git and try again. If you still cannot find the spec, use the instructions from step 4a and use the `spec.md` from the ticket.
 
