@@ -150,7 +150,7 @@ Read the spec's eligibility criteria and benefit-value methodology against what 
 
 | Outcome | What you write |
 |---|---|
-| **Federal PE program** | A class in `programs/programs/federal/pe/{member,spm,tax}.py` — wiring attributes only |
+| **Federal PE program** | Two cases. A base more than one white label reuses → `{PROGRAM_DIR}/base.py`, with `abstract=True` when it backs no row (the `Cdcc` / `Aca` / `HeadStart` pattern) or a `program_code` when it also backs the bare federal row (`Snap` backs `snap`). A federal-white-label program with its own row, shown in every state → `programs/programs/white_labels/federal/{program}/calculator.py` (the `trump_account` pattern). Wiring attributes only either way |
 | **State PE program** | A class in `{PROGRAM_DIR}/{state}.py` — subclassing the family's `base.py` when that base is itself a real PE calculator, otherwise standing beside its siblings. Adds only the state-code dependency and any state-specific inputs |
 | **Neither** — a gap the user has decided PolicyEngine won't close | Nothing here. Halt and hand off to `/add-custom-program` as a full custom calculator |
 | **Unresolved** | No row applies yet. Stay halted; don't route an input-solvable gap to `/add-custom-program` |

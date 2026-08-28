@@ -75,7 +75,7 @@ The Linear ticket must have a `{state}_{program}_spec.md` file attached (e.g. `t
 
 **Other sections in the spec.md** (`## Eligibility Criteria`, `## Benefit Value`, `## Acceptance Criteria`, `## Source Documentation`, `## Research Output`, etc.) may be present and are ignored by this skill.
 
-For a canonical example, see `benefits-api/programs/programs/tx/head_start/spec.md`.
+For a canonical example, see `benefits-api/programs/programs/cross_white_label/head_start/specs/tx.md`.
 
 ---
 
