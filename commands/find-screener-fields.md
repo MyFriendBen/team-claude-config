@@ -19,7 +19,9 @@ Ask the user:
 
 > Please provide the `spec.md` file for the program you want to map. You can either:
 > - Paste the full content directly into the chat, or
-> - Give me the file path (e.g. `benefits-api/programs/programs/co/leap/spec.md`) and I'll read it.
+> - Give me the file path and I'll read it. Specs live in two places: a family member at
+>   `benefits-api/programs/programs/cross_white_label/liheap/specs/mo.md`, a single-white-label
+>   program at `benefits-api/programs/programs/white_labels/wa/hcv/spec.md`.
 
 Read the file if a path is given. Confirm the program name, state, and white label before proceeding.
 
