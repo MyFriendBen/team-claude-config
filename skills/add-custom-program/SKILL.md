@@ -504,6 +504,7 @@ def make_calculator(has_mortgage=True, members=None, ...):
 **DB-based (when the calculator walks `household_members`, income streams, or insurance):**
 ```python
 from programs.programs.testing_fixtures.custom_calculator import CustomCalculatorTestCase
+from programs.programs.white_labels.tx.my_program.calculator import MyProgram
 
 class TestMyProgram(CustomCalculatorTestCase):
     calculator_class = MyProgram
