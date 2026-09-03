@@ -501,28 +501,39 @@ def make_calculator(has_mortgage=True, members=None, ...):
     return MyCalculator(mock_screen, mock_program, {}, mock_missing_deps)
 ```
 
-**DB-based (when you need real model interactions):**
+**DB-based (when the calculator walks `household_members`, income streams, or insurance):**
 ```python
-from django.test import TestCase
-from screener.models import Screen, HouseholdMember, IncomeStream, WhiteLabel
-from programs.models import Program, FederalPoveryLimit
-from programs.util import Dependencies
+from programs.programs.testing_fixtures.custom_calculator import CustomCalculatorTestCase
 
-class TestMyProgram(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.wl = WhiteLabel.objects.create(name="Texas", code="tx", state_code="TX")
-        cls.fpl_year = FederalPoveryLimit.objects.create(year="2026", period="2026")
-        cls.program = Program.objects.new_program(white_label="tx", name_abbreviated="tx_my_program")
-        cls.program.year = cls.fpl_year
-        cls.program.save()
+class TestMyProgram(CustomCalculatorTestCase):
+    calculator_class = MyProgram
+    program_code = "tx_my_program"
+    white_label_code = "tx"
+    state_code = "TX"
+
+    def test_eligible_household(self):
+        screen = self.make_screen("tx", "TX", household_size=2, county="Harris County")
+        self.add_income(self.add_member(screen, age=36), 2_000)
+
+        e = self.calculate(screen)
+
+        self.assertTrue(e.eligible)
+        self.assertEqual(e.value, 1_200)
 ```
+
+The base class creates the white label, the `Program` row and its FPL year, and supplies
+`make_screen` / `add_member` / `add_income` / `add_expense` / `add_insurance`. Add
+`needs_program_row = False` when the calculator never reads `self.program` — that skips the
+Translation rows a real `Program` writes and is the common case. `make_calculator(screen)`
+returns the calculator unrun, for asserting on `eligible()` or a program-specific method.
+See `benefits-api/docs/TESTING.md` for which style to pick; the mock form above stays
+correct for calculators that only read a few scalars.
 
 ### What to test
 
 Map your tests to the spec's eligibility criteria and benefit value section:
 
-1. **Class attributes** — verify registration in state calculators dict, correct class constants
+1. **Class attributes** — `program_code` equals the `Program.name_abbreviated` row it backs; correct class constants
 2. **Member eligibility** — each age/disability/pregnancy condition from the spec
 3. **Household eligibility** — income thresholds, location, expense checks, categorical bypasses
 4. **Benefit value** — each value tier or calculation path
