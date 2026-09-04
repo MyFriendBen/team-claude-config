@@ -166,7 +166,7 @@ Run these checks automatically for every PR. Each is conditional on what the PR 
 
 **A. Business Logic Correctness** *(if PR adds or modifies a calculator or eligibility rule)*
 
-1. Detect whether the PR touches any file matching `programs/programs/{state}/{program}/` or any calculator/eligibility file
+1. Detect whether the PR touches any file under `programs/programs/cross_white_label/` or `programs/programs/white_labels/`, or any calculator/eligibility file
 2. If yes, find the corresponding `spec.md` for the affected program(s)
 3. Read the spec and compare it line-by-line against the calculator implementation in the diff
 4. Document:
@@ -350,7 +350,7 @@ Run these checks automatically for every PR. Each is conditional on what the PR 
 
 {Skip section with "N/A — no eligibility logic modified" if not applicable}
 
-**Spec compared**: `programs/programs/{state}/{program}/spec.md`
+**Spec compared**: `{path to the affected program's spec.md}`
 
 **Correctly implemented:**
 - {Rules from spec that the code handles correctly}
