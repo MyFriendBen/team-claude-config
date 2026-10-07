@@ -95,15 +95,17 @@ Are you sure you want to proceed? (yes/no)
    ```
    Then read the file with the Read tool. If the URL has expired (Linear signed URLs are short-lived), re-fetch the ticket to get a fresh URL. If it still can't be fetched, ask the user to paste the spec contents.
 
-   b. ***If running in the `staging` or `production` environment*** - Find the spec in the local directory. Specs live under `programs/programs/` in one of two shapes, depending on whether the program is state-only or shared across white labels. Determine the program from the Linear ticket name and take the best match; if the first shape misses, try the second before giving up.
+   b. ***If running in the `staging` or `production` environment*** - Find the spec in the local directory. Specs live under `programs/programs/` in one of three shapes, depending on whether the program is state-only, shared across white labels, or federal. Determine the program from the Linear ticket name and take the best match; if one shape misses, try the next before giving up.
 
    - State-only: `programs/programs/white_labels/{whitelabel}/{program_snake_case}/spec.md`
    - Shared across white labels: `programs/programs/cross_white_label/{family}/specs/{whitelabel}.md`
+   - Federal (shown to every white label): `programs/programs/white_labels/federal/{program_snake_case}/spec.md`
 
    Examples:
    - `programs/programs/white_labels/co/collegeinvest_first_step/spec.md`
    - `programs/programs/white_labels/wa/orca_lift/spec.md`
    - `programs/programs/cross_white_label/medicaid/chip/specs/ks.md`
+   - `programs/programs/white_labels/federal/trump_account/spec.md`
 
    A plain `find programs/programs -name 'spec.md' -o -path '*specs/*.md'` is the fastest way to resolve one when the shape is unclear.
 
@@ -111,6 +113,8 @@ Are you sure you want to proceed? (yes/no)
 
 5. **Parse the spec.md** — extract from `## Program Details`:
    - Program name, state code, white label
+
+   **A federal spec runs under the `federal` white label**, whatever its header says — a spec under `white_labels/federal/`, or one whose header says it is federal. See **Federal programs** in Phase 2.
 
    Extract each `### Scenario N:` block under `## Test Scenarios` into structured data:
    - Scenario number and description
@@ -238,6 +242,17 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
   "current_benefits": ["{program name_abbreviated for each benefit the scenario household currently receives, e.g. \"snap\", \"tanf\"}"]
 }
 ```
+
+#### Federal programs
+
+A federal program's scenarios run as test screens under the `federal` white label, with no location:
+
+- `"white_label": "federal"` and `"is_test": true`. The API accepts `federal` only for test screens; without `is_test` it returns `400` ("'federal' only takes test screens").
+- **Omit `zipcode` and `county`** — leave the keys out, even when the scenario names a location. `federal` has no ZIP map, so nothing checks or reads one.
+- The response lists federal programs only, so other programs can't crowd the result.
+- `current_benefits` resolves against federal programs only; a state program's name is silently dropped.
+- The environment needs the `federal` white label (benefits-api #1808: staging once merged, production after its release) and the program imported and active there. Before that, posting `federal` fails, and an inactive program comes back "Not found" with `missing_programs: false`.
+- A federal program that needs a location will drop out with `missing_programs: true`. Report it as an ERROR naming the dependency; don't add a location to work around it.
 
 **Current benefits:** send the household's current benefits as `current_benefits`, a list of program `name_abbreviated` values (e.g. `["snap", "tanf", "wic"]`); use `[]` when the scenario household has no current benefits.
 
