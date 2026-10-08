@@ -173,8 +173,7 @@ Run these checks automatically for every PR. Each is conditional on what the PR 
    - Rules implemented correctly
    - Any discrepancies between spec and code (wrong thresholds, missing conditions, incorrect benefit amounts)
    - Any spec rules not covered by the implementation
-5. **Important**: The validation JSON (`validations/.../data/{program}.json`) is only ever expected to contain 3 scenarios — it is not meant to cover every scenario defined in `spec.md`. The spec's full scenario list is for Playwright end-to-end testing and manual QA; the validation JSON covers a small representative subset for the automated validation harness. Do not flag missing validation scenarios as a gap.
-6. If no calculator changes detected, note: "Not applicable — no eligibility logic modified in this PR."
+5. If no calculator changes detected, note: "Not applicable — no eligibility logic modified in this PR."
 
 **B. Migration Safety** *(if PR includes Django migrations)*
 

@@ -198,7 +198,7 @@ Are you sure you want to proceed? (yes/no)
 
 ### Phase 2: Build API Payloads
 
-For each **API-testable** scenario (skip frontend-only scenarios), construct a Screen API payload. The payload format matches the validation JSON schema at `validations/management/commands/import_validations/test_case_schema.json`.
+For each **API-testable** scenario (skip frontend-only scenarios), construct a Screen API payload. The payload is a Screen create request: `benefits-api/screener/serializers.py::ScreenSerializer` defines the valid fields.
 
 #### Payload Template
 
@@ -369,11 +369,11 @@ birth_month = 1  (default, unless spec provides explicit month)
 ```
 If the spec says "Birth month/year: June 2022", use `birth_month: 6, birth_year: 2022` directly and calculate age from that.
 
-**County naming rules** (from test_case_schema.json and confirmed against validation JSON files):
+**County naming rules:**
 - CO, NC: Include "County" suffix (e.g., "Denver County", "Wake County")
 - TX, IL: No "County" suffix (e.g., "Travis", "Cook")
 - MA: Use city names (e.g., "Boston", "Cambridge")
-- WA: Include "County" suffix (e.g., "King County", "Pierce County") — confirmed against `wa_hcv.json`; the test_case_schema.json note saying no suffix is incorrect for WA
+- WA: Include "County" suffix (e.g., "King County", "Pierce County")
 
 ---
 
@@ -706,22 +706,6 @@ These scenarios should be tested using the Playwright QA skill or manual browser
 - Enter the household data from the scenario steps
 - Submit and verify the results page for the expected display behavior
 ```
-
----
-
-## Comparison with Existing Validation JSON
-
-After running all scenarios, if a corresponding validation JSON file exists at `validations/management/commands/import_validations/data/{state}_{program}.json`, note this in the results:
-
-```markdown
-## Cross-Reference
-
-Validation file exists: `validations/.../data/tx_head_start.json`
-The validation JSON contains [N] test cases that can be imported via `import_validations` management command.
-Spec scenarios and validation JSON should produce consistent results.
-```
-
-This is informational only — do not modify the validation JSON.
 
 ---
 

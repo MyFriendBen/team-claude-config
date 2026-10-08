@@ -56,7 +56,7 @@ Read `${CLAUDE_SKILL_DIR}/outline-map.json`. It defines every Outline doc under 
       "combination_strategy": "sectioned | concat",
       "section_separator": "---",
       "sources": [
-        { "path": "discovery-review/SKILL.md", "heading": "Discovery Review" }
+        { "path": "api-qa-execution/SKILL.md", "heading": "API QA Execution" }
       ]
     }
   ]
