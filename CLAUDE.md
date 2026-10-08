@@ -190,7 +190,7 @@ MyFriendBen is a multi-tenant benefits screening platform that helps individuals
 - **Multi-tenant architecture** - Each state/organization has its own white label configuration
 - **Dual eligibility calculation** - Combines PolicyEngine API with custom state-specific calculators
 - **Multi-language support** - All content stored in Translation model for i18n
-- **Core apps**: screener (household data), programs (benefit definitions), authentication, configuration, integrations, translations, validations
+- **Core apps**: screener (household data), programs (benefit definitions), authentication, configuration, integrations, translations
 
 ### Frontend (benefits-fe/)
 
