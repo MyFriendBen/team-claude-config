@@ -278,7 +278,7 @@ from programs.programs.testing_fixtures.pe_integration import (
 
 @pytest.mark.integration                      # applies VCR — without it the test hits PE live every run
 class Test{State}{Program}(PeIntegrationTestCase):
-    pe_version = "1.815.1"                    # exact version these cassettes were recorded at
+    # Records and replays at the suite pin, PE_TEST_VERSION. See the version rule below.
 
     def test_scenario_1_{short_scenario_name}(self):
         """Scenario 1 from spec.md: {one-line restatement}."""
@@ -298,7 +298,19 @@ class Test{State}{Program}(PeIntegrationTestCase):
 Non-negotiables, each of which is what makes a cassette replayable:
 
 - **Explicit primary keys** on the screen and every member. The PolicyEngine request *and response* are keyed by member id, so auto-assigned pks produce a cassette that can't be replayed. Use the helpers; don't call `HouseholdMember.objects.create` directly.
-- **`pe_version` set to an exact version PolicyEngine currently serves** (`curl -s https://household.api.policyengine.org/versions/us`). PolicyEngine rejects exact versions other than what `current`/`frontier` resolve to.
+- **Record at a version PolicyEngine serves.** Tests follow the suite pin, `PE_TEST_VERSION` in `pe_integration.py`. If it equals `current` or `frontier` (`curl -s https://household.api.policyengine.org/versions/us`), set no `pe_version`. Otherwise PolicyEngine 422s at the suite pin: pin the module to `current` with a reason. Use exactly this layout, with no trailing comments on these lines, since `record_and_diff --adopt` finds and rewrites it by pattern. The constants go after the imports; the attributes go at the top of every class that subclasses `PeIntegrationTestCase` directly:
+
+  ```python
+  PE_VERSION = "2.18.0"
+  PE_VERSION_REASON = "The suite pin isn't served; recorded at current. Remove both once PE_TEST_VERSION reaches it."
+
+  class Test{State}{Program}(PeIntegrationTestCase):
+      pe_version = PE_VERSION
+      pe_version_reason = PE_VERSION_REASON
+  ```
+
+  A pin that differs from `PE_TEST_VERSION` without a reason fails `setUp`. Don't bump `PE_TEST_VERSION`: every module following it would need re-recording. The weekly `/pe-cassette-refresh` run moves it.
+- **Build each scenario at the program's recorded year.** `calc_pe_program` fails a scenario whose `make_program(..., year=...)` differs from the program's entry in `programs/vintage.py`. A scenario that deliberately runs another year passes `off_vintage="<why>"` to `calc_pe_program`. Programs with no entry aren't checked.
 - **Assert with `screener_value(...)`**, which truncates to whole dollars the way the API does. Build the household from the scenario's stated income, ages, county, and current benefits — a scenario tests nothing if its household doesn't match the spec.
 - **Fixed integer ages, not `birth_year_month`.** A birth date makes every age a function of `timezone.now()`, and VCR matches on the exact request body — so the whole suite breaks on a calendar boundary. Derive the age once against the spec's stated evaluation date.
 - **Two test files per program.** The scenario file carries the cassettes; a sibling wiring file (no `integration` marker) covers the payload shape and any value arithmetic with a stub `Sim`. Arithmetic tested there needs no cassette and keeps passing when PolicyEngine moves.
@@ -328,7 +340,7 @@ curl -s https://household.api.policyengine.org/versions/us   # e.g. {"current":"
 
 Reuse the Phase 2.1 probe with each version string. If any scenario differs, say so in the PR's **Deployment** section as a required `PolicyEngineConfig.policyengine_version` pin — this is a launch blocker, not a footnote. Hand the production check to the user; don't query production yourself.
 
-Note the standing fragility: `PolicyEngineConfig` rejects the floating aliases and `household.api` returns `422 unsupported_version` for any exact version that isn't currently `current` or `frontier`, so a pin has to move — and these cassettes have to be re-recorded — every time PolicyEngine promotes past it.
+Note the standing fragility: `PolicyEngineConfig` rejects the floating aliases and `household.api` returns `422 unsupported_version` for any exact version that isn't currently `current` or `frontier`, so a pin has to move — and these cassettes have to be re-recorded — every time PolicyEngine promotes past it. The weekly `/pe-cassette-refresh` run does that for test cassettes: it re-records every PE module and drops a module's `PE_VERSION` when its values don't change.
 
 ### 5.3 Reconcile the recorded values with the spec
 
