@@ -268,7 +268,6 @@ benefits-api/{PROGRAM_DIR}/tests/cassettes/                  # written by the re
 ```
 
 ```python
-import pytest
 from programs.programs.cross_white_label.{family}.{state} import {State}{Program}
 from programs.programs.testing_fixtures.pe_integration import (
     PeIntegrationTestCase, add_income, add_member, calc_pe_program, make_program, make_screen,
@@ -276,8 +275,7 @@ from programs.programs.testing_fixtures.pe_integration import (
 )
 
 
-@pytest.mark.integration                      # applies VCR — without it the test hits PE live every run
-class Test{State}{Program}(PeIntegrationTestCase):
+class Test{State}{Program}(PeIntegrationTestCase):   # the base class applies the integration marker (VCR)
     # Records and replays at the suite pin, PE_TEST_VERSION. See the version rule below.
 
     def test_scenario_1_{short_scenario_name}(self):
@@ -287,7 +285,7 @@ class Test{State}{Program}(PeIntegrationTestCase):
         parent = add_member(screen, member_id=1, relationship="headOfHousehold", age=34)
         add_income(parent, amount=1_496)                   # as stated by the scenario
         add_member(screen, member_id=2, relationship="child", age=3)
-        program = make_program("{state}", "{name_abbreviated}", year="2026")
+        program = make_program("{state}", "{name_abbreviated}", year="{vintage_year}")   # edition in programs/vintage.py
 
         eligibility = calc_pe_program(screen, {State}{Program}, program)
 
@@ -298,7 +296,7 @@ class Test{State}{Program}(PeIntegrationTestCase):
 Non-negotiables, each of which is what makes a cassette replayable:
 
 - **Explicit primary keys** on the screen and every member. The PolicyEngine request *and response* are keyed by member id, so auto-assigned pks produce a cassette that can't be replayed. Use the helpers; don't call `HouseholdMember.objects.create` directly.
-- **Record at a version PolicyEngine serves.** Tests follow the suite pin, `PE_TEST_VERSION` in `pe_integration.py`. If it equals `current` or `frontier` (`curl -s https://household.api.policyengine.org/versions/us`), set no `pe_version`. Otherwise PolicyEngine 422s at the suite pin: pin the module to `current` with a reason. Use exactly this layout, with no trailing comments on these lines, since `record_and_diff --adopt` finds and rewrites it by pattern. The constants go after the imports; the attributes go at the top of every class that subclasses `PeIntegrationTestCase` directly:
+- **Record at a version PolicyEngine serves.** Tests follow the suite pin, `PE_TEST_VERSION` in `pe_integration.py`. If it equals `current` or `frontier` (`curl -s https://household.api.policyengine.org/versions/us`), set no `pe_version`. Otherwise PolicyEngine 422s at the suite pin: pin the module to the exact version `current` resolves to (never the literal `"current"`, which records a body that replays forever and hides drift), with a reason. Use exactly this layout, with no trailing comments on these lines, since `record_and_diff --adopt` finds and rewrites it by pattern. The constants go after the imports; the attributes go at the top of every class that subclasses `PeIntegrationTestCase` directly:
 
   ```python
   PE_VERSION = "2.18.0"
@@ -310,7 +308,7 @@ Non-negotiables, each of which is what makes a cassette replayable:
   ```
 
   A pin that differs from `PE_TEST_VERSION` without a reason fails `setUp`. Don't bump `PE_TEST_VERSION`: every module following it would need re-recording. The weekly `/pe-cassette-refresh` run moves it.
-- **Build each scenario at the program's recorded year.** `calc_pe_program` fails a scenario whose `make_program(..., year=...)` differs from the program's entry in `programs/vintage.py`. A scenario that deliberately runs another year passes `off_vintage="<why>"` to `calc_pe_program`. Programs with no entry aren't checked.
+- **Build each scenario at the program's recorded year.** `calc_pe_program` fails a scenario whose `make_program(..., year=...)` differs from the program's entry in `programs/vintage.py`. A new program has no entry, and a program with none isn't checked, so add one: `edition` is the year the spec's values are stated for, `basis=Basis.COVERAGE_YEAR`, `status=Status.CONFIRMED`, and `rule`/`source` from the spec. Tax credits use the prior tax year (`_PRIOR_TAX_YEAR`). The `year` in `initial_config.json` and every scenario's `make_program` use the same edition. A scenario that deliberately runs another year passes `off_vintage="<why>"` to `calc_pe_program`.
 - **Assert with `screener_value(...)`**, which truncates to whole dollars the way the API does. Build the household from the scenario's stated income, ages, county, and current benefits — a scenario tests nothing if its household doesn't match the spec.
 - **Fixed integer ages, not `birth_year_month`.** A birth date makes every age a function of `timezone.now()`, and VCR matches on the exact request body — so the whole suite breaks on a calendar boundary. Derive the age once against the spec's stated evaluation date.
 - **Two test files per program.** The scenario file carries the cassettes; a sibling wiring file (no `integration` marker) covers the payload shape and any value arithmetic with a stub `Sim`. Arithmetic tested there needs no cassette and keeps passing when PolicyEngine moves.
@@ -332,7 +330,7 @@ VCR_MODE=none venv/bin/pytest {PROGRAM_DIR}/tests/ -q
 
 Both commands must be green before moving on. A failed recording never writes a cassette, so if recording fails, fix the cause and re-run.
 
-**If you recorded against `frontier`, check `current` too.** A spec whose values depend on a recent PolicyEngine fix will only reproduce on the version carrying it. Unpinned production traffic rides `current`, so cassettes that pass at `frontier` prove nothing about what users will see. Re-run the key scenarios against both versions and diff them:
+**If `PE_TEST_VERSION` is `frontier`, check `current` too.** A spec whose values depend on a recent PolicyEngine fix will only reproduce on the version carrying it. Unpinned production traffic rides `current`, so cassettes that pass at `frontier` prove nothing about what users will see. Re-run the key scenarios against both versions and diff them:
 
 ```bash
 curl -s https://household.api.policyengine.org/versions/us   # e.g. {"current":"1.794.2","frontier":"1.815.1"}
@@ -340,7 +338,7 @@ curl -s https://household.api.policyengine.org/versions/us   # e.g. {"current":"
 
 Reuse the Phase 2.1 probe with each version string. If any scenario differs, say so in the PR's **Deployment** section as a required `PolicyEngineConfig.policyengine_version` pin — this is a launch blocker, not a footnote. Hand the production check to the user; don't query production yourself.
 
-Note the standing fragility: `PolicyEngineConfig` rejects the floating aliases and `household.api` returns `422 unsupported_version` for any exact version that isn't currently `current` or `frontier`, so a pin has to move — and these cassettes have to be re-recorded — every time PolicyEngine promotes past it. The weekly `/pe-cassette-refresh` run does that for test cassettes: it re-records every PE module and drops a module's `PE_VERSION` when its values don't change.
+Note the standing fragility: `PolicyEngineConfig` rejects the floating aliases and `household.api` returns `422 unsupported_version` for any exact version that isn't currently `current` or `frontier`, so a pin has to move — and these cassettes have to be re-recorded — every time PolicyEngine promotes past it. The weekly `/pe-cassette-refresh` run does that for test cassettes: it re-records every PE module and drops a module's `PE_VERSION` only when every one of its tests passes at the new version with unchanged values. One failing or newly skipped test keeps the pin.
 
 ### 5.3 Reconcile the recorded values with the spec
 
@@ -415,8 +413,9 @@ Then:
 Opening the PR is part of this workflow — always complete this phase.
 
 1. Read the canonical PR body template at `team-claude-config/docs/PR_TEMPLATE.md` and fill it in (this is the single source of truth — do not hand-roll a different structure).
-2. State in the PR body which PolicyEngine version the cassettes were recorded at, and how many spec scenarios are covered.
-3. Create the PR:
+2. Rebase on main first. If `PE_TEST_VERSION` moved since you recorded, a module with no `PE_VERSION` now sends the new pin and its cassettes no longer match: re-record (Phase 5.2), or pin it per the version rule in 5.1. Repeat before merging.
+3. State in the PR body which PolicyEngine version the cassettes were recorded at (the module's `PE_VERSION`, else `PE_TEST_VERSION`), and how many spec scenarios are covered.
+4. Create the PR:
    ```bash
    gh pr create \
      --title "Add {State} {Program} ({state_abbrev})" \
@@ -426,7 +425,7 @@ Opening the PR is part of this workflow — always complete this phase.
    )" \
      --assignee @me
    ```
-4. Include a link to the Linear ticket in the PR body (under **Context & Motivation**) when the program came from a ticket.
+5. Include a link to the Linear ticket in the PR body (under **Context & Motivation**) when the program came from a ticket.
 
 ## Phase 9: Comment QA Scenarios on Linear Ticket
 
@@ -442,7 +441,7 @@ Skip this phase for a config-only federal passthrough (no spec, no scenarios).
 
 ## Phase 10: Summary and Next Steps
 
-Summarize what you did: files created, the engine decision from Phase 2, how many spec scenarios are covered by tests, the PolicyEngine version the cassettes were recorded at, any values back-filled into the spec, anything you halted on, and the PR link.
+Summarize what you did: files created, the engine decision from Phase 2, how many spec scenarios are covered by tests, the PolicyEngine version the cassettes were recorded at (`PE_VERSION`, else `PE_TEST_VERSION`), any values back-filled into the spec, anything you halted on, and the PR link.
 
 Suggest these next steps in order:
 1. Review the PR and address any CodeRabbit feedback
