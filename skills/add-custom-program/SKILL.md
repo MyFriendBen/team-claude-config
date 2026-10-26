@@ -501,28 +501,96 @@ def make_calculator(has_mortgage=True, members=None, ...):
     return MyCalculator(mock_screen, mock_program, {}, mock_missing_deps)
 ```
 
-**DB-based (when you need real model interactions):**
+**DB-based (when the calculator walks `household_members`, income streams, or insurance):**
 ```python
-from django.test import TestCase
-from screener.models import Screen, HouseholdMember, IncomeStream, WhiteLabel
-from programs.models import Program, FederalPoveryLimit
-from programs.util import Dependencies
+from programs.programs.testing_fixtures.custom_calculator import CustomCalculatorTestCase
+from programs.programs.white_labels.tx.my_program.calculator import MyProgram
 
-class TestMyProgram(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.wl = WhiteLabel.objects.create(name="Texas", code="tx", state_code="TX")
-        cls.fpl_year = FederalPoveryLimit.objects.create(year="2026", period="2026")
-        cls.program = Program.objects.new_program(white_label="tx", name_abbreviated="tx_my_program")
-        cls.program.year = cls.fpl_year
-        cls.program.save()
+class TestMyProgram(CustomCalculatorTestCase):
+    calculator_class = MyProgram
+    white_label_code = "tx"
+    state_code = "TX"
+    default_county = "Harris County"
+
+    def test_eligible_household(self):
+        screen = self.make_screen(household_size=2)
+        self.add_member(screen, "headOfHousehold", 36, monthly_income=2_000)
+
+        e = self.calculate(screen)
+
+        self.assertTrue(e.eligible)
+        self.assertEqual(e.value, 1_200)
 ```
+
+The base class creates the white label, the `Program` row and its FPL year, then runs the
+calculator. A scenario states only what makes it distinct.
+
+**Do not write your own `make_screen` / `add_member` / `_calc` helper.** If the fixture is
+missing something your program needs, add it to the fixture — a per-file helper is the
+duplication this exists to remove.
+
+#### Class attributes
+
+| attribute | when to set it |
+| -- | -- |
+| `calculator_class` | always — `program_code` is taken from it, so do not restate it |
+| `white_label_code`, `state_code` | always |
+| `default_zipcode`, `default_county` | when the program is local to one place, so scenarios name a location only to move away from it. Note MA stores a city in `county` |
+| `needs_program_row = False` | when the calculator never reads `self.program` — no FPL or SMI lookup. Skips the Translation rows a real `Program` writes, and is the common case |
+| `fpl_year` | when the program is tested against a year other than the default |
+| `reference_date` | only when a scenario is pinned to a calendar window — a program start date, an enrollment window, a birth month copied from the spec |
+
+#### Building a household
+
+| call | notes |
+| -- | -- |
+| `self.make_screen(household_size=2, county=...)` | white label, state and default location come from the class |
+| `self.add_member(screen, "child", 3, monthly_income=...)` | also takes `yearly_income`, `pregnant`, `student`, `disabled`, any `HouseholdMember` field |
+| `add_income(member, amount, income_type=..., frequency=...)` | for a second stream, or a frequency other than monthly/yearly |
+| `add_expense(member, amount, expense_type="rent")` | |
+| `add_insurance(member, medicaid=True, none=False)` | a member already comes with an uninsured record |
+
+`age` may be fractional — `3.5` is three years six months — for calculators reading
+`fraction_age()`. `add_member` writes a matching `birth_year_month`, so a calculator reading
+either field sees the same person; pass `birth_year_month` yourself only when the scenario
+turns on an absolute date. State a `yearly_income` as yearly rather than dividing it down:
+a limit tested at the boundary rarely survives the rounding.
+
+#### Running it
+
+| call | returns |
+| -- | -- |
+| `self.calculate(screen)` | the final `Eligibility` |
+| `self.make_calculator(screen)` | the calculator unrun, to assert on `eligible()` or one method |
+| `self.calculate(screen, data={"tx_medicaid": eligible_result()})` | for a calculator gating on another program via `program_eligible()` |
+| `self.calculate(screen, missing=("income_amount",))` | to assert the program is skipped rather than valued wrongly |
+
+#### If the calculator reads HUD
+
+Wrap the call in `hud_ami` rather than patching `hud_client` — it is bound per calculator
+module, so a hand-written patch target is easy to get wrong:
+
+```python
+with self.hud_ami(50_000) as hud:
+    e = self.calculate(screen)
+
+hud.get_screen_il_ami.assert_called_once_with(screen, "80%", "2025")
+```
+
+`limit` may be a scalar, a dict keyed by AMI band (`{"60%": 60_000, "80%": 80_000}`), or a
+callable when what HUD was *asked* is the thing under test. Add `payment_standard=` for the
+voucher lookup, and `unavailable=True` / `payment_standard_unavailable=True` for the outage
+paths. HUD's own behaviour is covered by its tests in
+`integrations/clients/hud_income_limits/tests` — do not re-test it here.
+
+See `benefits-api/docs/TESTING.md` for the fuller reference. The mock form above stays
+correct for calculators that only read a few scalars off the screen.
 
 ### What to test
 
 Map your tests to the spec's eligibility criteria and benefit value section:
 
-1. **Class attributes** — verify registration in state calculators dict, correct class constants
+1. **Class attributes** — the class constants the spec fixes (amounts, age bounds, FPL percentages). `program_code` needs no test: the base class takes it from the calculator and rejects a subclass that contradicts it
 2. **Member eligibility** — each age/disability/pregnancy condition from the spec
 3. **Household eligibility** — income thresholds, location, expense checks, categorical bypasses
 4. **Benefit value** — each value tier or calculation path
