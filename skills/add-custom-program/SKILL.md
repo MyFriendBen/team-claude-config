@@ -1,6 +1,6 @@
 ---
 name: add-custom-program
-description: Implements a new custom ProgramCalculator in benefits-api from two research artifacts (initial_config.json, spec.md). Use this skill whenever the user wants to implement a new benefit program with a custom calculator, add a program from a Linear ticket, or mentions implementing a program from research/discovery artifacts. Also use when the user says "add program", "implement calculator", or references a ticket with program research files.
+description: Implements a new custom ProgramCalculator in benefits-api from two research artifacts (the program-ops program record, spec.md). Use this skill whenever the user wants to implement a new benefit program with a custom calculator, add a program from a Linear ticket, or mentions implementing a program from research/discovery artifacts. Also use when the user says "add program", "implement calculator", or references a ticket with program research files.
 ---
 
 <command-name>add-custom-program</command-name>
@@ -10,7 +10,7 @@ description: Implements a new custom ProgramCalculator in benefits-api from two 
 Implements a new custom `ProgramCalculator` in `benefits-api` from two research artifacts produced during Discovery. Takes either a Linear ticket ID or local file paths as input.
 
 The two artifacts are:
-- `[name_abbreviated]_initial_config.json` — program metadata, documents, navigators, warning messages
+- `{key}_program_record.json` — program metadata, documents, navigators, warning messages. It lives in program-ops (`programs/**/`), is never copied into benefits-api, and is imported from there in Phase 5
 - `[name_abbreviated]_spec.md` — eligibility criteria, benefit value methodology, test scenarios
 
 ## Where things live
@@ -35,7 +35,7 @@ Everything else:
 | Condition messages | `programs/framework/eligibility_messages.py` (imported as `import programs.framework.eligibility_messages as messages`) |
 | Registry | `programs/framework/registry.py` — walks the package; **not a file you edit** (see 3.4) |
 | External clients | `integrations/clients/` — e.g. `from integrations.clients.hud_income_limits import hud_client, HudIncomeClientError` |
-| Initial config | `programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json` |
+| Program record | `program-ops/programs/**/{key}_program_record.json` — lives in program-ops, never copied into benefits-api. Imported with program-ops' `scripts/import_programs.py` |
 
 ## Phase 1: Gather Inputs
 
@@ -50,18 +50,18 @@ Ask the user how they want to provide the artifacts:
 1. Fetch the ticket with `mcp__Linear__get_issue`
 2. Extract:
    - **Branch name** — from the `branchName` field on the issue object
-   - **Spec markdown** and **initial config JSON** — from ticket attachments
-     - If the MCP response includes attachment URLs, fetch them. Write both files exactly as-is — do not summarize, paraphrase, or reformat.
-     - If attachments can't be fetched automatically, ask the user to paste the file contents
+   - **Program key** (e.g. `mo_sab`) — the program's `name_abbreviated`
+   - **Spec markdown** — from the program-ops Discovery PR or ticket attachment. Write it exactly as-is — do not summarize, paraphrase, or reformat.
+   - **Program record** — `program-ops/programs/**/{key}_program_record.json`, written by Discovery. Read it from program-ops; don't copy it anywhere. If it isn't on program-ops `main` yet, ask which branch has it.
 3. If any piece is missing, prompt the user before continuing
 
 ### Option 2: Local Files
 
-Ask the user for the paths to the two files. Read each one and confirm you have both before proceeding.
+Ask the user for the path to the spec and the program key; the record is `program-ops/programs/**/{key}_program_record.json`. Read both and confirm before proceeding.
 
 ### After gathering inputs
 
-1. Derive the **state code** (e.g. `tx`, `co`, `il`) and **program name** in snake_case (e.g. `hse`, `ccad`) from the config's `white_label.code` and `program.name_abbreviated`.
+1. Derive the **state code** (e.g. `tx`, `co`, `il`) and **program name** in snake_case (e.g. `hse`, `ccad`) from the record's `white_label.code` and `program.name_abbreviated`.
 2. In `benefits-api/`, create or switch to a feature branch:
    ```bash
    git checkout -b {username}/mfb-{ticket}-implement-{program_name}
@@ -69,25 +69,18 @@ Ask the user for the paths to the two files. Read each one and confirm you have 
    git checkout {branch-name}
    ```
 
-## Phase 2: Place Research Files
+## Phase 2: Place the Spec
 
-Write (or move) the two artifacts to their canonical locations in the repo:
+Write the spec to its canonical location. The program record stays in program-ops.
 
-**Initial config:**
-```
-programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
-```
-
-**Spec:**
 ```
 programs/programs/white_labels/{state}/{program}/spec.md
 ```
 
-Commit (stage specific files, not `git add .` or `git add -A`, to avoid picking up unrelated changes from auto-formatters):
+Commit (stage the specific file, not `git add .` or `git add -A`, to avoid picking up unrelated changes from auto-formatters):
 ```
-git add programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
 git add programs/programs/white_labels/{state}/{program}/spec.md
-git commit -m "Add {state} {program} research files"
+git commit -m "Add {state} {program} spec"
 ```
 
 ## Phase 3: Implement the Calculator
@@ -550,21 +543,32 @@ git commit -m "Add unit tests for {ClassName}"
 
 Run all commands from the `benefits-api/` directory. Use `venv/bin/python` for all manage.py commands.
 
-### 5.1 Import the initial config
+### 5.1 Import the program record
 
-Read `programs/management/commands/import_program_config.py` to understand the command interface, then run it for the new config file.
+From `program-ops/`, with `benefits-api/` beside it on this branch (the import only creates a program whose calculator is registered, so it has to run against this branch's code):
 
-Fix any import errors and commit fixes before continuing.
+```bash
+python3 scripts/import_programs.py --env local --dry-run-only --program {key}
+python3 scripts/import_programs.py --env local --program {key}
+```
+
+The dry run lists anything that blocks the import. A fix to the record goes in a program-ops PR, never into benefits-api.
 
 ### 5.2 Activate the program
 
-Set `Program.active = True` for the new program.
+An import never switches a program on or off: a new program is created switched off, and a record carrying `active` is rejected. Switch it on locally to test:
+
+```bash
+venv/bin/python manage.py shell -c "from programs.models import Program; Program.objects.filter(name_abbreviated='{key}').update(active=True)"
+```
+
+On staging and prod, switching it on is an admin decision made after the import there.
 
 ## Phase 6: "Already Have" Screener Step (Conditional)
 
-Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's `initial_config.json` at import time. There is nothing else to wire up: no white-label config edit, no database/serializer/frontend changes. (A household's declared benefits are stored in the `CurrentBenefit` join table and read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
+Whether a program appears as a tile on the "I already have this benefit" screener step is driven entirely by its `Program` row — specifically `show_in_has_benefits_step` — which is set from the program's record at import time. There is nothing else to wire up: no white-label config edit, no database/serializer/frontend changes. (A household's declared benefits are stored in the `CurrentBenefit` join table and read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
 
-There is nothing to *build* here — only a decision to make and confirm in the config you're importing.
+There is nothing to *build* here — only a decision to make and confirm in the record you're importing.
 
 **The criterion is functional, not size-based.** A program belongs on this step only if knowing a household already receives it changes the eligibility result of *another* program — i.e. it confers categorical/presumed eligibility (or is a disqualifier) elsewhere. It does **not** have to be a "major" program; conversely, a large program that nothing else keys off of does not belong here. Don't guess from the program's prominence — verify:
 
@@ -576,14 +580,14 @@ There is nothing to *build* here — only a decision to make and confirm in the 
    ```
    A hit means another calculator reads this benefit's state (directly, via `has_base_benefit`, or through a `presumptive_eligibility` / `categorically_eligible` list) → it needs `show_in_has_benefits_step: true`. **But no hit is not proof it's unneeded** — the program is new, so nothing could have referenced it yet. Always also do check #2.
 
-2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies that were somehow written ahead of it — usually none. This check looks for gaps: does receiving this new program categorically/presumptively qualify a household for one of our existing programs? Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (e.g. via `programs/programs/white_labels/{state}/`, `programs/programs/cross_white_label/`, and the program config). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
+2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies that were somehow written ahead of it — usually none. This check looks for gaps: does receiving this new program categorically/presumptively qualify a household for one of our existing programs? Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (e.g. via `programs/programs/white_labels/{state}/`, `programs/programs/cross_white_label/`, and the program records in program-ops). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
 
 Then:
 
-- If either check says yes, set `"show_in_has_benefits_step": true` (and `"active": true`) in the program's `initial_config.json`. The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields — nothing else to wire up.
+- If either check says yes, set `"show_in_has_benefits_step": true` in the program's record (a program-ops PR). The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields — nothing else to wire up.
 - Otherwise (the common case), leave `show_in_has_benefits_step: false` — skip to Phase 7.
 
-If you change this flag in the config, re-run the program config import so the `Program` row reflects it.
+If you change this flag in the record, re-run the Phase 5.1 import so the `Program` row reflects it.
 
 ## Phase 7: Summary
 
@@ -596,4 +600,4 @@ Suggest next steps:
 1. Review the code changes and address any issues
 2. Run the full test suite to check for regressions
 3. Run `/playwright-qa-execution` locally to QA the program end-to-end
-4. Open a PR when ready
+4. Open a PR when ready. Under **Deployment**, list the import: once deployed to staging and the record is on program-ops `main`, run `python3 scripts/import_programs.py --env staging --program {key}` from program-ops, then switch the program on in the admin.
