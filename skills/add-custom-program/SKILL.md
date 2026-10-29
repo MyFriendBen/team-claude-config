@@ -45,10 +45,12 @@ A family's base is `cross_white_label/{family}/base.py`. When a new MFB base rep
 
 ## Phase 1: Gather Inputs
 
-1. Fetch the Linear ticket (`get_issue`). Take the **branch name** (`gitBranchName`) and the **program key** (the record's `program.name_abbreviated`, e.g. `mo_sab` or `federal_wic`).
-2. Find the record and spec in program-ops: `git -C program-ops ls-tree -r --name-only origin/main programs | grep {key}`. For a family, list the whole family directory (`grep cross_white_label/{family}/`): the base spec has its own key (`nslp`) and no record, so a grep for the state key misses it. If they aren't on program-ops `main` yet, ask which branch or open PR has them, and read them from there. Don't copy them.
-3. Derive the white label (`white_label.code`) and program name from the record.
-4. **Classify the program.** This decides whether Phase 6 applies:
+1. Fetch the Linear ticket (`get_issue` with `includeRelations`). Take the **branch name** (`gitBranchName`) and the **program key** (the record's `program.name_abbreviated`, e.g. `mo_sab` or `federal_wic`).
+2. **Read the comments** (`list_comments`) on the ticket, its Discovery sub-issue and its related tickets. They carry what landed after Discovery: a proposed spec change, a follow-up someone owes. A comment that changes the spec is settled in a program-ops PR before you write code, and you implement against that PR's spec. A follow-up goes in the Phase 7 summary.
+3. **Check open benefits-api PRs** for the same white label or shared code the calculator will touch (`gh pr list --search "{wl}"`, plus the program's family or base). Build on `main`, not on an unmerged PR, and say in your PR which ones overlap.
+4. Find the record and spec in program-ops: `git -C program-ops ls-tree -r --name-only origin/main programs | grep {key}`. For a family, list the whole family directory (`grep cross_white_label/{family}/`): the base spec has its own key (`nslp`) and no record, so a grep for the state key misses it. If they aren't on program-ops `main` yet, ask which branch or open PR has them, and read them from there. Don't copy them.
+5. Derive the white label (`white_label.code`) and program name from the record.
+6. **Classify the program.** This decides whether Phase 6 applies:
    - **State-only** or **shared across white labels**: Phases 2–5 and 7.
    - **New family base plus its first state:** a base spec (`{family}/base/`, no record) and a state spec plus record. The base is `abstract=True` and backs no row; the state subclass is the program. Phases 2–5 and 7, testing the base through a stand-in subclass (Phase 3).
    - **Federal, new:** the record's white label is `federal` and no state rows carry the same `base_program`. Phases 2–5 and 7, plus the federal notes in 2.3.
@@ -57,7 +59,7 @@ A family's base is `cross_white_label/{family}/base.py`. When a new MFB base rep
      git grep -nE "program_code = \"[a-z_]*{program}\"" -- programs/programs
      venv/bin/python manage.py shell -c "from programs.models import Program; print(list(Program.objects.filter(base_program='{program}').values_list('white_label__code', 'name_abbreviated', 'active')))"
      ```
-5. In `benefits-api/`, create or switch to the feature branch from up-to-date `main`.
+7. In `benefits-api/`, create or switch to the feature branch from up-to-date `main`.
 
 ## Phase 2: Implement the Calculator
 
@@ -75,6 +77,8 @@ Read 2–3 existing calculators first. Good references by complexity:
 - **Federal replacing state rows** (per-member value, adjunctive eligibility, base-group reads): `programs/programs/white_labels/federal/wic/calculator.py`
 
 Also read `programs/framework/base.py`, `programs/framework/eligibility_messages.py`, `programs/framework/registry.py`, and a sibling's `tests/` directory.
+
+**Reuse a sibling's rule; don't copy it.** Read the other calculators in the same white label and family. If one already computes a rule this spec states the same way (which income counts, who the filers are, a tax schedule), share it rather than writing a second copy. Put it where the framework README's placement rule says: in the white label's directory when every user is in that white label. Refactoring the sibling to import it must not change its behavior, so its tests pass unchanged.
 
 ### 2.2 Create the calculator directory
 
@@ -100,6 +104,11 @@ The calculator subclasses `ProgramCalculator`. Map spec criteria to overrides:
 - **Residency** is the white label's job; never check the state.
 - **Declare only the fields every white label sends.** A missing dependency drops the program from that screen with `missing_programs` set. The Get Ahead apps (`co_tax_calculator`) don't send `pregnant`, for example. Read a field that can be missing as a safe default (`member.pregnant is True`) rather than declaring it, and test both answers.
 - **Location dependencies:** a program that needs `county` or `zipcode` drops out of `federal` test screens, which have no location.
+
+**Tax programs** (claimed on a return for a tax year):
+- **Year:** read `self.tax_year` (`programs/framework/base.py`), which follows the record's `year`. Don't hardcode it. Key yearly figures by tax year, and fall back to the latest year with a Sentry message rather than raising (`CTC_YEARS` in `federal/ctc/calculator.py`).
+- **Tax Table:** where the source sends filers below a ceiling to a Tax Table, reproduce it. Price each row at its midpoint and round to the dollar (`tax_table_row` and `income_tax` in `federal/ctc/calculator.py`). The table is exact arithmetic, so the rate schedule applied to the exact figure is not an acceptable approximation.
+- **Yearly upkeep:** the program needs adding to the tax-year roll ticket and to the `_prior_tax_year` warning rows for its white label. Name both in the Phase 7 summary.
 
 ### Available APIs
 
@@ -260,7 +269,7 @@ e.condition(member.age is not None and member.age >= 65)
 e.condition(member.age is not None and self.min_age <= member.age <= self.max_age)
 ```
 
-When the spec judges age at the end of a benefit or tax year ("65 or older by December 31, 2025"), use `member.age_at_end_of_year(self.benefit_year)`, not `member.age`. Keep the year as a class attribute, and test with a birth year that makes today's age and the year-end age differ (see `white_labels/nj/anchor/calculator.py`).
+When the spec judges age at the end of a benefit or tax year ("65 or older by December 31, 2025"), use `member.age_at_end_of_year(year)`, not `member.age`. For a tax program `year` is `self.tax_year`; for a benefit year the record doesn't carry, keep it as a class attribute (`benefit_year`). Test with a birth year that makes today's age and the year-end age differ (see `white_labels/nj/anchor/calculator.py`).
 
 **Tiered member_value based on age or income:**
 ```python
@@ -321,7 +330,13 @@ Rounding: the API serializes `estimated_value` as an integer (`screener/serializ
 
 ### Dependencies
 
-List every screener field the calculator reads: `"age"`, `"income_amount"`, `"income_frequency"`, `"household_size"`, `"county"`, `"zipcode"`, `"pregnant"`, `"health_insurance"`, `"household_assets"`, `"relationship"`. A declared field that's null drops the program and sets `missing_programs`. For a federal program, re-read 2.3's federal notes before declaring one.
+List every screener field the calculator reads, by the names the screens' `missing_fields()` reports (`screener/models.py`):
+- screen: `household_size`, `household_assets`, `county`, `zipcode`
+- member: `age`, `relationship`, `student`, `pregnant`, `visually_impaired`, `disabled`, `long_term_disability`, `insurance`
+- income: `income_type`, `income_amount`, `income_frequency`
+- expense: `expense_type`, `expense_amount`, `expense_frequency`
+
+A name not on these lists (e.g. `health_insurance`, `veteran`) is never reported missing, so declaring it protects nothing. A declared field that's null drops the program and sets `missing_programs`. For a federal program, re-read 2.3's federal notes before declaring one.
 
 ### Messages
 
@@ -484,8 +499,8 @@ Summarize:
 - the files created or changed;
 - test results;
 - the spec's data gaps and deviations;
-- for a federal replacement, which release each PR belongs to and the cleanup ticket.
-
+- for a federal replacement, which release each PR belongs to and the cleanup ticket;
+- follow-ups from the ticket comments (Phase 1) still open, and for a tax program the yearly upkeep in 2.3;
 - the ticket's "Done when" items outside the code (other tickets to rescope, the spec's `Calculator` and `Calculator added` fields to fill after merge).
 
 Suggest QA with `/api-qa-execution {ticket} local`. Federal programs run as `federal` test screens with no location. A scenario whose current benefit exists only as a state program runs on that state's white label.
