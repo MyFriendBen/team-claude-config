@@ -284,7 +284,7 @@ class Test{State}{Program}(PeIntegrationTestCase):   # the base class applies th
 Non-negotiables, each of which is what makes a cassette replayable:
 
 - **Explicit primary keys** on the screen and every member. The PolicyEngine request *and response* are keyed by member id, so auto-assigned pks produce a cassette that can't be replayed. Use the helpers; don't call `HouseholdMember.objects.create` directly.
-- **Record at a version PolicyEngine serves.** Tests follow the suite pin, `PE_TEST_VERSION` in `pe_integration.py`. If it equals `current` or `frontier` (`curl -s https://household.api.policyengine.org/versions/us`), set no `pe_version`. Otherwise PolicyEngine 422s at the suite pin: pin the module to the exact version `current` resolves to (never the literal `"current"`, which records a body that replays forever and hides drift), with a reason. Use exactly this layout, with no trailing comments on these lines, since `record_and_diff --adopt` finds and rewrites it by pattern. The constants go after the imports; the attributes go at the top of every class that subclasses `PeIntegrationTestCase` directly:
+- **Record at a version PolicyEngine serves.** Tests follow the suite pin, `PE_TEST_VERSION` in `pe_integration.py`. If it equals the exact version `current` or `frontier` resolves to (`curl -s https://household.api.policyengine.org/versions/us`), set no `pe_version`. Otherwise PolicyEngine 422s at the suite pin: pin the module to the exact version `current` resolves to (never the literal `"current"`, which records a body that replays forever and hides drift), with a reason. Use exactly this layout, with no trailing comments on these lines, since `record_and_diff --adopt` finds and rewrites it by pattern. The constants go after the imports; the attributes go at the top of every class that subclasses `PeIntegrationTestCase` directly:
 
   ```python
   PE_VERSION = "2.18.0"
@@ -318,7 +318,7 @@ VCR_MODE=none venv/bin/pytest {PROGRAM_DIR}/tests/ -q
 
 Both commands must be green before moving on. A failed recording never writes a cassette, so if recording fails, fix the cause and re-run.
 
-**If `PE_TEST_VERSION` is `frontier`, check `current` too.** A spec whose values depend on a recent PolicyEngine fix will only reproduce on the version carrying it. Unpinned production traffic rides `current`, so cassettes that pass at `frontier` prove nothing about what users will see. Re-run the key scenarios against both versions and diff them:
+**If `PE_TEST_VERSION` is the version `frontier` resolves to, check `current` too.** A spec whose values depend on a recent PolicyEngine fix will only reproduce on the version carrying it. Unpinned production traffic rides `current`, so cassettes that pass at `frontier` prove nothing about what users will see. Re-run the key scenarios against both versions and diff them:
 
 ```bash
 curl -s https://household.api.policyengine.org/versions/us   # e.g. {"current":"1.794.2","frontier":"1.815.1"}
@@ -412,7 +412,7 @@ Then:
 Opening the PR is part of this workflow — always complete this phase.
 
 1. Read the canonical PR body template at `team-claude-config/docs/PR_TEMPLATE.md` and fill it in (this is the single source of truth — do not hand-roll a different structure).
-2. Rebase on main first. If `PE_TEST_VERSION` moved since you recorded, a module with no `PE_VERSION` now sends the new pin and its cassettes no longer match: re-record (Phase 5.2), or pin it per the version rule in 5.1. Repeat before merging.
+2. Rebase on main first. If `PE_TEST_VERSION` moved since you recorded, a module with no `PE_VERSION` now sends the new pin and its cassettes no longer match: re-record at the new pin (Phase 5.2). Only if PE still serves the version they were recorded at, pin the module to that version instead, with a reason (layout in 5.1). Repeat before merging.
 3. State in the PR body which PolicyEngine version the cassettes were recorded at (the module's `PE_VERSION`, else `PE_TEST_VERSION`), and how many spec scenarios are covered.
 4. Create the PR:
    ```bash
