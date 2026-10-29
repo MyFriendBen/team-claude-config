@@ -105,13 +105,13 @@ cd "$WT" && VCR_MODE=none "$PY" -m pytest -q -p no:cacheprovider -m integration
 It must pass. A failure means adoption left a module inconsistent; stop and report it.
 
 Commit. If the black hook reformats a file, `git add` it and commit again. Unless `--dry-run`, push `pe-drift/$DATE` and open a PR titled `PE drift: adopt PolicyEngine $CURRENT ($DATE)`. Write the body to `$RUN/pr-body.md` (never a shared `/tmp` name), following `.github/pull_request_template.md`:
-- **Context & Motivation:** the weekly refresh; `PIN` → `CURRENT`; link the rollup ticket (Step 7).
-- **Changes Made:** adopted modules; held modules and why, linking the rollup.
+- **Context & Motivation:** the weekly refresh; `PIN` → `CURRENT`; link the rollup ticket (Step 7) if there is one.
+- **Changes Made:** adopted modules; held modules and why, linking the rollup if there is one.
 - **Testing:** "Strict replay (`VCR_MODE=none pytest -m integration`) passes." No migrations, config or env changes.
 - **Deployment:** none. Test-only change.
 - **Notes for Reviewers:** anything surprising from triage.
 
-Unless `--dry-run`, fill in the rollup link after Step 7 with `gh pr edit --body-file "$RUN/pr-body.md"`.
+If Step 7 files a rollup and this step opened a PR, add the rollup link with `gh pr edit --body-file "$RUN/pr-body.md"` (not under `--dry-run`).
 
 ## Step 6: Triage
 
@@ -144,7 +144,7 @@ Skip writes under `--dry-run`; print the drafts.
 **Rollup** (one per run; skip only if there are no findings and nothing carried forward):
 - Team **MFB General**, label `PE Drift`, priority High, title `PE drift rollup — week of <Monday of DATE>`.
 - Body:
-  - Header: run date, who ran it, `PIN` / `CURRENT` / `FRONTIER`, link to the PR.
+  - Header: run date, who ran it, `PIN` / `CURRENT` / `FRONTIER`, and the PR if Step 5 opened one.
   - **Live now (`CURRENT`)** and **Coming (`FRONTIER`)** sections. One subsection per program: a table of scenario / before / after, the class and its one-line reason, the spec citation, the PE changelog entry.
   - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording.
 
@@ -157,7 +157,7 @@ Skip writes under `--dry-run`; print the drafts.
 
 Report to the dev: the versions, counts per class, links to the PR, rollup and any Urgent tickets, and anything triage couldn't decide.
 
-Remove the worktree only once its branch is pushed (or under `--dry-run`): `rm "$WT/venv" && git worktree remove "$WT"`. Keep `$RUN` until the rollup is triaged.
+Remove the worktree once its branch is pushed, under `--dry-run`, or if Step 5 found no changes: `rm "$WT/venv" && git worktree remove "$WT"`. With no changes, also delete the unused branch: `git branch -D "pe-drift/$DATE"`. Keep `$RUN` until the rollup is triaged.
 
 ## First run
 
