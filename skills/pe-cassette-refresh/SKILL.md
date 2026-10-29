@@ -36,28 +36,34 @@ git fetch -q origin
 redis-cli ping                                   # PONG; else: redis-server --daemonize yes
 grep -c -E '^POLICY_ENGINE_CLIENT_(ID|SECRET)=.' .env   # must print 2; never print the values
 gh auth status
-curl -s https://household.api.policyengine.org/versions/us
 ```
 
 Confirm Linear works by listing teams through the Linear MCP; tickets go to team **MFB General**.
 
-Record for the rest of the run:
-- `DATE` — today, `YYYY-MM-DD`
-- `CURRENT` and `FRONTIER` — the exact versions just returned. Don't re-resolve later; PE can promote mid-run.
-- `PIN` — `PE_TEST_VERSION` on `origin/main`:
-  `git show origin/main:programs/programs/testing_fixtures/pe_integration.py | grep '^PE_TEST_VERSION'`
+Set the run's values. Resolve PE once: it can promote mid-run.
+
+```bash
+DATE=$(date +%F)
+VERSIONS=$(curl -sf https://household.api.policyengine.org/versions/us)   # -f: an HTTP error fails here
+CURRENT=$(echo "$VERSIONS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["current"])')
+FRONTIER=$(echo "$VERSIONS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["frontier"])')
+PIN=$(git show origin/main:programs/programs/testing_fixtures/pe_integration.py | sed -n 's/^PE_TEST_VERSION = "\(.*\)"$/\1/p')
+echo "DATE=$DATE CURRENT=$CURRENT FRONTIER=$FRONTIER PIN=$PIN"
+```
+
+Stop unless `CURRENT`, `FRONTIER` and `PIN` are all exact versions (`2.53.1`, not empty or an alias). Shell variables don't carry between commands, so set these values again (or substitute them) in every later command.
 
 ## Step 2: Worktree
 
 Work in a fresh worktree off `origin/main`, inside `.claude/` (gitignored), so the dev's checkout is untouched and `.env` is found by walking up.
 
 ```bash
-cd $API
-WT=$API/.claude/worktrees/pe-drift-$DATE
-git worktree add -b pe-drift/$DATE $WT origin/main
-ln -s $API/venv $WT/venv                         # the pre-commit hook runs venv/bin/python; gitignored
+cd "$API"
+WT="$API/.claude/worktrees/pe-drift-$DATE"
+git worktree add -b "pe-drift/$DATE" "$WT" origin/main
+ln -s "$API/venv" "$WT/venv"                     # the pre-commit hook runs venv/bin/python; gitignored
 RUN=/tmp/pe-drift/$DATE
-PY=$WT/venv/bin/python
+PY="$WT/venv/bin/python"
 ```
 
 Run every later command from `$WT` with `$PY`.
@@ -67,18 +73,21 @@ Run every later command from `$WT` with `$PY`.
 Skip if `FRONTIER == CURRENT`.
 
 ```bash
-cd $WT && $PY manage.py record_and_diff --target $FRONTIER --out $RUN/frontier
+cd "$WT" && "$PY" manage.py record_and_diff --target "$FRONTIER" --out "$RUN/frontier"
 ```
 
 Takes several minutes: a baseline replay, then a serial live recording of every PE scenario. Writes `$RUN/frontier/diff.json`. Nothing in the worktree changes. If `baseline.log` shows failures, `main` itself is broken: stop and report them.
 
 ## Step 4: Current pass (adoption)
 
-Always run it. Even when `CURRENT == PIN`, modules still pinned below `CURRENT` get re-recorded. Reuse the frontier baseline if there is one.
+Always run it. Even when `CURRENT == PIN`, modules still pinned below `CURRENT` get re-recorded.
 
 ```bash
-cd $WT && $PY manage.py record_and_diff --target $CURRENT --out $RUN/current \
-    --baseline $RUN/frontier/baseline --adopt      # drop --baseline if Step 3 was skipped
+cd "$WT"
+# Step 3 ran: reuse its baseline.
+"$PY" manage.py record_and_diff --target "$CURRENT" --out "$RUN/current" --baseline "$RUN/frontier/baseline" --adopt
+# Step 3 was skipped:
+"$PY" manage.py record_and_diff --target "$CURRENT" --out "$RUN/current" --adopt
 ```
 
 `--adopt` moves `PE_TEST_VERSION` to `CURRENT`, copies in the new cassettes of every unchanged module and removes its pin, and pins every changed module at its old version with a reason. `diff.json` lists both under `adopt`.
@@ -87,22 +96,22 @@ cd $WT && $PY manage.py record_and_diff --target $CURRENT --out $RUN/current \
 
 ## Step 5: Verify and open the PR
 
-Skip if `git -C $WT status --porcelain` is empty.
+Skip if `git -C "$WT" status --porcelain` is empty.
 
 ```bash
-cd $WT && VCR_MODE=none $PY -m pytest -q -p no:cacheprovider -m integration
+cd "$WT" && VCR_MODE=none "$PY" -m pytest -q -p no:cacheprovider -m integration
 ```
 
 It must pass. A failure means adoption left a module inconsistent; stop and report it.
 
-Commit and push `pe-drift/$DATE`. If the black hook reformats a file, `git add` it and commit again. Unless `--dry-run`, open a PR titled `PE drift: adopt PolicyEngine $CURRENT ($DATE)`. Write the body to `$RUN/pr-body.md` (never a shared `/tmp` name), following `.github/pull_request_template.md`:
+Commit. If the black hook reformats a file, `git add` it and commit again. Unless `--dry-run`, push `pe-drift/$DATE` and open a PR titled `PE drift: adopt PolicyEngine $CURRENT ($DATE)`. Write the body to `$RUN/pr-body.md` (never a shared `/tmp` name), following `.github/pull_request_template.md`:
 - **Context & Motivation:** the weekly refresh; `PIN` → `CURRENT`; link the rollup ticket (Step 7).
 - **Changes Made:** adopted modules; held modules and why, linking the rollup.
 - **Testing:** "Strict replay (`VCR_MODE=none pytest -m integration`) passes." No migrations, config or env changes.
 - **Deployment:** none. Test-only change.
 - **Notes for Reviewers:** anything surprising from triage.
 
-Fill in the rollup link after Step 7 with `gh pr edit --body-file $RUN/pr-body.md`.
+Unless `--dry-run`, fill in the rollup link after Step 7 with `gh pr edit --body-file "$RUN/pr-body.md"`.
 
 ## Step 6: Triage
 
@@ -116,8 +125,8 @@ For every module in either `diff.json` whose `status` isn't `unchanged`, and eac
 
 | Class | Test | Goes to |
 |--|--|--|
-| **PE fix** | The new value matches the spec's cited source | Rollup: update the spec value and the assertion |
-| **Divergence** | The new value moves away from the cited source, or eligibility flips | Rollup: investigate; report upstream to PE if PE is wrong |
+| **PE fix** | The new value or eligibility matches the spec's cited source | Rollup: update the spec value and the assertion |
+| **Divergence** | The new value or eligibility moves away from the cited source | Rollup: investigate; report upstream to PE if PE is wrong |
 | **Screener-breaking** | `error` status: a request error (e.g. 422), a renamed or removed PE variable, or anything that would 500 the eligibility endpoint or drop programs from results | **Urgent** ticket |
 
 Give the reason in one sentence, with the citation. When unsure between fix and divergence, say so; a person decides.
@@ -148,7 +157,7 @@ Skip writes under `--dry-run`; print the drafts.
 
 Report to the dev: the versions, counts per class, links to the PR, rollup and any Urgent tickets, and anything triage couldn't decide.
 
-Remove the worktree only once its branch is pushed (or under `--dry-run`): `rm $WT/venv && git worktree remove $WT`. Keep `$RUN` until the rollup is triaged.
+Remove the worktree only once its branch is pushed (or under `--dry-run`): `rm "$WT/venv" && git worktree remove "$WT"`. Keep `$RUN` until the rollup is triaged.
 
 ## First run
 
