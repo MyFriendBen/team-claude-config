@@ -247,27 +247,31 @@ A federal program's scenarios run as test screens on the `federal` white label, 
 - **For a federal program replacing state rows,** QA after the switch-over migration has run (state rows off, federal row on). Add three checks:
   - a state white-label screen shows the program **once**, under its federal key, with no state row;
   - a household holding the federal key in `current_benefits` comes back `already_has: true`;
-  - a `co_tax_calculator` screen (the Get Ahead apps send no `pregnant` and few other fields) still calculates the program, if the program applies there.
+  - a `co_tax_calculator` screen (the Get Ahead apps send no `pregnant`, no birth dates and few other fields) still calculates the program, if the program applies there. Give the check `"age_only": true` and each member `"pregnant": null`; otherwise the runner sends birth dates and `pregnant: false`, and the check proves nothing.
 
 **Current benefits:** a list of `name_abbreviated` values for the white label the screen uses; `[]` when the household has none.
 
 #### Field Mapping from Spec Scenarios
 
-**Relationship mapping** (spec text → API enum):
+**Relationship mapping** (spec text → API value). The API doesn't validate `relationship`: a value not in this table saves without error, but the member then never counts as a dependent (`DEPENDENT_ELIGIBLE_RELATIONSHIPS` in `screener/models.py`), which can change a result without any warning. The source of truth is `relationship_options` in benefits-api `configuration/white_labels/base.py`, plus `headOfHousehold` for person 1.
 | Spec Text | API Value |
 |---|---|
 | Head of Household | `headOfHousehold` |
 | Spouse | `spouse` |
-| Child | `child` |
-| Parent | `parent` |
-| Foster Child | `fosterChild` |
-| Foster Parent | `fosterParent` |
-| Step Parent | `stepParent` |
-| Grandparent | `grandParent` |
-| Grandchild | `grandChild` |
-| Sibling | `sibling` |
 | Domestic Partner | `domesticPartner` |
-| Other | `other` |
+| Boyfriend / Girlfriend | `boyfriendOrGirlfriend` |
+| Child | `child` |
+| Step-child | `stepChild` |
+| Foster Child / Kinship Care | `fosterChild` |
+| Grandchild | `grandChild` |
+| Parent | `parent` |
+| Step-parent | `stepParent` |
+| Foster Parent | `fosterParent` |
+| Grandparent | `grandParent` |
+| Sibling / Sister / Brother | `sisterOrBrother` |
+| Step-sibling | `stepSisterOrBrother` |
+| Other relative (aunt, uncle, cousin, in-law) | `relatedOther` |
+| Roommate / unrelated | `roommate` |
 
 **Income type mapping** (spec text → API enum):
 | Spec Text | API Value |
@@ -297,7 +301,7 @@ A federal program's scenarios run as test screens on the `federal` white label, 
 | per year / yearly / annually | `yearly` |
 | per week / weekly / every week | `weekly` |
 | biweekly / every two weeks | `biweekly` |
-| hourly | `hourly` |
+| hourly | `hourly`, with hours worked per week as a 4th element: `["wages", 20, "hourly", 30]` |
 
 **Insurance mapping** (spec text → insurance object field):
 | Spec Text | Field to set `true` |
@@ -386,9 +390,10 @@ Send every flag on every member, `false` where the scenario doesn't set it: the 
 
 **Age → birth_year/birth_month calculation:**
 ```
-birth_year = current_year - age
 birth_month = 1  (default, unless spec provides explicit month)
+birth_year = current_year - age, minus 1 more if birth_month is later than the current month
 ```
+The runner does this from `age` and `birth_month`, so `age` stays today's age.
 If the spec says "Birth month/year: June 2022", use `birth_month: 6, birth_year: 2022` directly and calculate age from that.
 
 **County naming rules:**
@@ -482,7 +487,7 @@ Mark scenario complete in todo list and move to next.
 
 ### Phase 4: Execute with the runner
 
-Don't hand-write a script. Write a **scenario file** and run the bundled `runner.py` (in this skill's directory). The runner does the API work the same way every time: it reads the key without printing it, calls curl with `-k` and timeouts, retries Heroku's HTML 503 replies, polls while `missing_programs` is pending, applies the rounding tolerance, and writes the reports.
+Don't hand-write a script. Write a **scenario file** and run the bundled `runner.py` (in this skill's directory). The runner does the API work the same way every time: it reads the key without printing it, calls curl with `-k` and timeouts, retries Heroku's HTML 503 replies, reports a failed eligibility call as ERROR (never as "Not found"), polls while `missing_programs` is pending, applies the rounding tolerance, and writes the reports.
 
 **1. Write the scenario file** to `~/main/qa/{TICKET-ID}-{program_key}-scenarios.json`, translating spec section 8 scenario by scenario. Model it on `examples/federal_wic.json` (federal, a state override, checks) or `examples/nj_anchor.json` (state, expenses, year-end ages).
 
@@ -504,8 +509,8 @@ Don't hand-write a script. Write a **scenario file** and run the bundled `runner
 ```
 
 - **File level:** `program` (the spec's Program Key), `white_label`, and `zipcode` + `county` for a state white label (sent when given; never on `federal`; `_default` takes none). `title` and `spec` go in the report.
-- **Scenario:** `n`, `title`, `members`, `expect`. Optional: `white_label` / `zipcode` / `county` (per-scenario override, e.g. a federal scenario whose current benefit is a state program), `expenses` (`[type, amount, frequency]`), `current_benefits`, `household_size` (default: number of members), `household_assets`, `blocked` (a reason; the scenario isn't sent and is reported BLOCKED, outside the pass rate. Use it for a scenario the environment can't express yet, name the ticket that unblocks it, and remove it once that ships).
-- **Member:** `rel`, then `age` (today's age) or `age_end_of_year` (`{"year": 2025, "age": 64}`, which sets the birth year to year − age). Optional: `birth_month` (default 1), `income` (`[type, amount, frequency]`), `insurance` (list of types; default `["none"]`), and the flags `pregnant`, `student`, `student_full_time`, `disabled`, `long_term_disability`, `unemployed`, `veteran`, `visually_impaired` (each sent as `false` unless set, as the screener does).
+- **Scenario:** `n`, `title`, `members`, `expect`. Optional: `white_label` / `zipcode` / `county` (per-scenario override, e.g. a federal scenario whose current benefit is a state program), `expenses` (`[type, amount, frequency]`), `current_benefits`, `household_size` (default: number of members), `household_assets`, `age_only` (send each member's age without a birth year or month, as the Get Ahead apps do; use it on a `co_tax_calculator` screen), `blocked` (a reason; the scenario isn't sent and is reported BLOCKED, outside the pass rate. Use it for a scenario the environment can't express yet, name the ticket that unblocks it, and remove it once that ships).
+- **Member:** `rel`, then `age` (today's age) or `age_end_of_year` (`{"year": 2025, "age": 64}`, which sets the birth year to year − age). Optional: `birth_month` (default 1; the birth year shifts so `age` is still today's age), `income` (`[type, amount, frequency]`, or `[type, amount, "hourly", hours_per_week]`), `insurance` (list of types; default `["none"]`), and the flags `pregnant`, `student`, `student_full_time`, `disabled`, `long_term_disability`, `unemployed`, `veteran`, `visually_impaired` (each sent as `false` unless set, as the screener does).
 - **`expect`:** `eligible` (true/false), `annual` (expected annual dollars, from Phase 1 step 5), `units` (eligible members for a per-member value, default 1; that's the rounding tolerance).
 - **`checks`** (optional), with the same screen fields plus `type`:
   - `result`: like a scenario, but reported as a check;

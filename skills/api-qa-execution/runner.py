@@ -53,7 +53,7 @@ MEMBER_FLAGS = (
 FILE_KEYS = {"program", "title", "spec", "white_label", "zipcode", "county", "scenarios", "checks"}
 SCENARIO_KEYS = {
     "n", "title", "white_label", "zipcode", "county", "household_size", "household_assets",
-    "members", "expenses", "current_benefits", "expect", "blocked",
+    "members", "expenses", "current_benefits", "expect", "blocked", "age_only",
 }
 CHECK_KEYS = SCENARIO_KEYS - {"n"} | {"type", "match"}
 MEMBER_KEYS = {"rel", "age", "age_end_of_year", "birth_month", "income", "insurance", *MEMBER_FLAGS}
@@ -105,23 +105,42 @@ def load_scenario_file(path: Path) -> dict:
 # Payloads
 
 
-def build_member(m: dict) -> dict:
+def build_income(stream: list) -> dict:
+    """`[type, amount, frequency]`, or `[type, amount, "hourly", hours_per_week]`."""
+    if len(stream) not in (3, 4):
+        raise ScenarioFileError(f"income {stream}: needs [type, amount, frequency] or [type, amount, frequency, hours]")
+    income_type, amount, frequency, *hours = stream
+    if (frequency == "hourly") != bool(hours):
+        raise ScenarioFileError(f"income {stream}: hourly income takes hours worked per week as a 4th element, "
+                                "and only hourly income takes one")
+    income = {"type": income_type, "amount": amount, "frequency": frequency}
+    if hours:
+        income["hours_worked"] = hours[0]
+    return income
+
+
+def build_member(m: dict, age_only: bool = False) -> dict:
     """A household member from the scenario file's compact form.
 
-    `age` is today's age (born in January of NOW.year - age). `age_end_of_year`
-    ({"year": 2025, "age": 64}) is an age on December 31 of that year, so the birth year
-    is year - age; use it for rules judged at the end of a benefit or tax year.
+    `age` is today's age; with `birth_month` the birth year is the one that gives that age
+    today. `age_end_of_year` ({"year": 2025, "age": 64}) is an age on December 31 of that
+    year, so the birth year is year - age; use it for rules judged at the end of a benefit or
+    tax year. `age_only` sends today's age without a birth year or month, as the Get Ahead
+    apps do.
     """
+    birth_month = m.get("birth_month", 1)
+    birthday_ahead = 1 if NOW.month < birth_month else 0
     if "age_end_of_year" in m:
         birth_year = m["age_end_of_year"]["year"] - m["age_end_of_year"]["age"]
     elif "age" in m:
-        birth_year = NOW.year - m["age"]
+        birth_year = NOW.year - m["age"] - birthday_ahead
     else:
         raise ScenarioFileError(f"member {m}: needs age or age_end_of_year")
-    birth_month = m.get("birth_month", 1)
-    age = NOW.year - birth_year - (1 if NOW.month < birth_month else 0)
+    if (birth_year, birth_month) > (NOW.year, NOW.month):
+        raise ScenarioFileError(f"member {m}: birth date {birth_year}-{birth_month:02} is in the future")
+    age = NOW.year - birth_year - birthday_ahead
 
-    streams = [{"type": t, "amount": a, "frequency": f} for t, a, f in m.get("income", [])]
+    streams = [build_income(s) for s in m.get("income", [])]
     covered = set(m.get("insurance", ["none"]))
     unknown = covered - set(INSURANCE_TYPES)
     if unknown:
@@ -129,9 +148,11 @@ def build_member(m: dict) -> dict:
     insurance = {t: t in covered for t in INSURANCE_TYPES}
 
     member = {
-        "relationship": m["rel"], "birth_year": birth_year, "birth_month": birth_month, "age": age,
+        "relationship": m["rel"], "age": age,
         "has_income": bool(streams), "income_streams": streams, "insurance": insurance,
     }
+    if not age_only:
+        member.update(birth_year=birth_year, birth_month=birth_month)
     # The screener sends false for every unticked condition box. A flag left out would be null, and
     # any program declaring it is dropped as a missing field. Pass null explicitly to test that.
     member.update({flag: m.get(flag, False) for flag in MEMBER_FLAGS})
@@ -140,7 +161,7 @@ def build_member(m: dict) -> dict:
 
 def build_payload(s: dict, defaults: dict) -> dict:
     white_label = s.get("white_label", defaults["white_label"]).lower()
-    members = [build_member(m) for m in s["members"]]
+    members = [build_member(m, s.get("age_only", False)) for m in s["members"]]
     payload = {
         "white_label": white_label, "is_test": True, "agree_to_tos": True, "is_13_or_older": True,
         "household_size": s.get("household_size", len(members)),
@@ -190,19 +211,23 @@ class Api:
                 return status, raw[:300]
         return 0, ""
 
-    def eligibility(self, uuid: str, program: str) -> dict:
-        """Poll while the program is absent and `missing_programs` says calculations are pending."""
-        elig: Any = {}
+    def eligibility(self, uuid: str, program: str) -> tuple[int, Any]:
+        """Poll while the program is absent and `missing_programs` says calculations are pending.
+
+        Returns the last status and body; the caller treats anything but a 200 with a
+        `programs` list as a failed call.
+        """
+        status, elig = 0, None
         for attempt in range(5):
             if attempt:
                 time.sleep(4)
-            _, elig = self.call("GET", f"/api/eligibility/{uuid}")
-            if isinstance(elig, dict) and (
+            status, elig = self.call("GET", f"/api/eligibility/{uuid}")
+            if status == 200 and isinstance(elig, dict) and (
                 any(p.get("name_abbreviated") == program for p in elig.get("programs", []))
                 or not elig.get("missing_programs")
             ):
-                return elig
-        return elig if isinstance(elig, dict) else {"error": elig}
+                break
+        return status, elig
 
 
 def resolve_key(env: str, benefits_api: Path) -> str:
@@ -293,8 +318,13 @@ def run_one(api: Api, item: dict, defaults: dict, program: str, label: str, kind
         return Outcome(label, title, kind, white_label, "BLOCKED", uuid=uuid,
                        detail=f"current_benefits {dropped} dropped: white label '{white_label}' has no program by "
                               f"that name, so the scenario can't be expressed here")
-    elig = api.eligibility(uuid, program)
-    programs = elig.get("programs", [])
+    status, elig = api.eligibility(uuid, program)
+    if status != 200 or not isinstance(elig, dict) or not isinstance(elig.get("programs"), list):
+        # A failed call returns no programs, which would otherwise read as "Not found" and
+        # pass every "Not eligible" scenario.
+        return Outcome(label, title, kind, white_label, "ERROR", uuid=uuid,
+                       detail=f"eligibility GET {status}: {str(elig)[:300]}")
+    programs = elig["programs"]
     row = next((p for p in programs if p.get("name_abbreviated") == program), None)
 
     if check_type == "shows_once":

@@ -136,9 +136,13 @@ self.screen.has_benefit_from_list(["leap", "wic"])      # bool — each entry an
 member.age                          # int or None — always check for None before comparisons
 member.age_at_end_of_year(2025)     # age on December 31 of that year (birth year only) — for rules
                                     #   judged over a benefit or tax year, not on the screening date
-member.relationship                 # str: "headOfHousehold", "spouse", "domesticPartner",
-                                    #       "child", "stepChild", "fosterChild", "grandChild",
-                                    #       "parent", "sibling", "other"
+member.relationship                 # str: "headOfHousehold", or a key of relationship_options
+                                    #   (configuration/white_labels/base.py): "spouse",
+                                    #   "domesticPartner", "boyfriendOrGirlfriend", "child",
+                                    #   "stepChild", "fosterChild", "grandChild", "parent",
+                                    #   "stepParent", "fosterParent", "grandParent",
+                                    #   "sisterOrBrother", "stepSisterOrBrother", "relatedOther",
+                                    #   "roommate". Not validated: compare against these exactly
 member.pregnant                     # bool or None — None when the screener never asked
 member.disabled                     # bool (general disability flag)
 member.visually_impaired            # bool
@@ -486,7 +490,7 @@ Its "before merging" check: in every environment, the federal row is active and 
 
 Before opening or updating a PR, and again before saying it's ready to merge:
 
-1. **Check migrations against the latest `main`.** `git fetch`, then merge `origin/main` into the branch (merge, don't rebase; force-push is blocked). Confirm each new migration depends on `main`'s current leaf, and that `venv/bin/python manage.py makemigrations --check --dry-run` is clean (it also catches "Conflicting migrations"). Renumber if `main` moved.
+1. **Check migrations against the latest `main`.** `git fetch`, then merge `origin/main` into the branch. Merge is the default because it keeps review comments anchored; a rebase is fine on your own branch if you push with `--force-with-lease`. Confirm each new migration depends on `main`'s current leaf, and that `venv/bin/python manage.py makemigrations --check --dry-run` is clean (it also catches "Conflicting migrations"). Renumber if `main` moved.
 2. Run the program's tests and anything touching the repointed reads.
 3. Open the PR ready, not draft, with the body structure from team-claude-config `docs/PR_TEMPLATE.md`. Its **Deployment** section gives the exact commands per environment:
    - **A standalone program:** the 6.3 step 2 import after deploy, then switching it on in the admin.

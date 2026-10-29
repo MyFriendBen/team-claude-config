@@ -473,10 +473,12 @@
       "white_label": "co_tax_calculator",
       "zipcode": "80202",
       "county": "Denver County",
+      "age_only": true,
       "members": [
         {
           "rel": "headOfHousehold",
           "age": 30,
+          "pregnant": null,
           "income": [
             [
               "wages",
@@ -487,7 +489,8 @@
         },
         {
           "rel": "child",
-          "age": 3
+          "age": 3,
+          "pregnant": null
         }
       ],
       "expect": {
