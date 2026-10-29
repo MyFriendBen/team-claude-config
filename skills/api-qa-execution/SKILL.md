@@ -333,7 +333,7 @@ Each current benefit the household receives is an entry in the `current_benefits
 | EITC | `eitc` |
 | None | `[]` (empty array) |
 
-**Note:** For the exact `name_abbreviated` a given white label uses, check the program's `initial_config.json` (`name_abbreviated` field) or query the `programs_program` table. The serializer resolves each entry against `(white_label, name_abbreviated)` and **silently drops** any name that white label has no `Program` for — so a typo or a name from the wrong white label just vanishes with no error. Any benefit the white label has a program for can be set here; it does not have to be one that renders as a visible tile on the current-benefits step.
+**Note:** For the exact `name_abbreviated` a given white label uses, check the program's record in program-ops (`program.name_abbreviated` in `programs/**/*_program_record.json`) or query the `programs_program` table. The serializer resolves each entry against `(white_label, name_abbreviated)` and **silently drops** any name that white label has no `Program` for — so a typo or a name from the wrong white label just vanishes with no error. Any benefit the white label has a program for can be set here; it does not have to be one that renders as a visible tile on the current-benefits step.
 
 **Expenses mapping** (spec text → expense object in `expenses` array):
 

@@ -9,7 +9,7 @@ example: /add-pe-program MFB-1234
 
 # Add PolicyEngine Program
 
-Implements a new PolicyEngine-based benefit program in the `benefits-api` repository. Takes a Linear ticket with program research and produces: research files (spec, initial config), a PolicyEngine program class, spec-scenario VCR tests with recorded cassettes, dependency test coverage, and an open PR.
+Implements a new PolicyEngine-based benefit program in the `benefits-api` repository. Takes a Linear ticket with program research and produces: the spec in benefits-api, a PolicyEngine program class, spec-scenario VCR tests with recorded cassettes, dependency test coverage, and an open PR.
 
 **Two rules govern this skill:**
 
@@ -40,7 +40,7 @@ Everything else:
 | Dependency bundles | `pe_dependencies/__init__.py` — `irs_gross_income`, `wic_income`, `tanf_income`, `receipt_contract`. Read the comments; they document what each bundle does and does not reach |
 | Payload assembly | `pe_dependencies/payload.py` (`pe_input`) |
 | Test helpers | `programs/programs/testing_fixtures/pe_integration.py` |
-| Initial config | `programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json` |
+| Program record | `program-ops/programs/**/{key}_program_record.json` — lives in program-ops, never copied into benefits-api. Imported with program-ops' `scripts/import_programs.py` |
 | HTTP client | `integrations/clients/policyengine/` — `engines.py`, `versions.py` |
 
 > `docs/TESTING.md`'s example imports the helpers from `programs.framework.tests.integration_test_helpers`, which does not exist. Import from `programs.programs.testing_fixtures.pe_integration` — that is what every real test does.
@@ -61,16 +61,16 @@ Ask the user how they want to provide the artifacts:
 2. Extract:
    - **Branch name** — from the `branchName` field on the issue object
    - **PolicyEngine variable name** — from the ticket description
-   - **Spec markdown** and **initial config JSON** — from ticket attachments
-     - If the MCP response includes attachment URLs, fetch them. Both files must be written exactly as-is from the attachment — do not summarize, paraphrase, or reformat either of them.
-     - If attachments can't be fetched automatically, ask the user to paste the file contents
+   - **Program key** (e.g. `mo_sab`) — the program's `name_abbreviated`
+   - **Spec markdown** — from the program-ops Discovery PR or ticket attachment. Write it exactly as-is — do not summarize, paraphrase, or reformat.
+   - **Program record** — `program-ops/programs/**/{key}_program_record.json`, written by Discovery. Read it from program-ops; don't copy it anywhere. If it isn't on program-ops `main` yet, ask which branch has it.
 3. If any piece is still missing after attempting to extract it, prompt the user before continuing
 
 ### Option 2: Local Files
 
-1. Ask whether this is a spec-backed program or a config-only federal passthrough (the `ks_ssi` precedent — see Phase 3).
-   - **Spec-backed** — ask for the paths to both the `spec.md` and the initial config JSON.
-   - **Config-only** — ask for the initial config JSON path alone, and ask for the **PolicyEngine variable name** directly. With no ticket and no spec there is no other source for it.
+1. Ask whether this is a spec-backed program or a record-only federal passthrough (the `ks_ssi` precedent — see Phase 3).
+   - **Spec-backed** — ask for the path to the `spec.md` and the program key; the record is `program-ops/programs/**/{key}_program_record.json`.
+   - **Record-only** — ask for the program key alone, and ask for the **PolicyEngine variable name** directly. With no ticket and no spec there is no other source for it.
 
    Read each file you were given and confirm it before proceeding.
 2. Ask for the **branch name** — there is no ticket to derive one from, so it has to be supplied.
@@ -78,7 +78,7 @@ Ask the user how they want to provide the artifacts:
 
 ### After gathering inputs
 
-1. Derive the **state** (e.g. `tx`, `co`, `il`) and **program name** (snake_case) from the config's `white_label.code` and `program.name_abbreviated`, and the **PolicyEngine variable name** from the ticket or spec.
+1. Derive the **state** (e.g. `tx`, `co`, `il`) and **program name** (snake_case) from the record's `white_label.code` and `program.name_abbreviated`, and the **PolicyEngine variable name** from the ticket or spec.
 2. In `benefits-api/`, create or switch to the feature branch (the ticket's `branchName` under Option 1, the name you collected under Option 2):
    ```bash
    git checkout -b {branch-name}
@@ -162,7 +162,7 @@ Read the spec's eligibility criteria and benefit-value methodology against what 
 - `pe_inputs`, `pe_outputs`
 - `pe_monthly_outputs` + `pe_period_month` for any output PolicyEngine defines per month, `dependencies`
 - A `member_value` / `household_value` override **only** when it is a bare delegation to PolicyEngine, e.g. `return self.get_member_variable(member.id)` (the `TxWic` pattern in `cross_white_label/wic/tx.py`, which exists to *stop* using a hardcoded federal amount)
-- Returning the sentinel `1` when PolicyEngine's variable is an eligibility flag with no dollar amount (the `IlHbwd` pattern, `cross_white_label/medicaid/disability/il_hbwd.py`), with the displayed amount carried by the program config's `estimated_value` / `value_format`. A `$0` value would be filtered out of results by the frontend, so the sentinel is how a no-dollar program stays visible.
+- Returning the sentinel `1` when PolicyEngine's variable is an eligibility flag with no dollar amount (the `IlHbwd` pattern, `cross_white_label/medicaid/disability/il_hbwd.py`), with the displayed amount carried by the program record's `estimated_value` / `value_format`. A `$0` value would be filtered out of results by the frontend, so the sentinel is how a no-dollar program stays visible.
 - Arithmetic that combines PolicyEngine's *own* outputs — annualizing a monthly figure (`× 12`), summing a per-member value, subtracting one PE output from another. `Snap` annualizes; `MoChip` computes `max(1, sum(chip_gross) − mo_chip_premium × 12)`. The test is whether every term came from PolicyEngine: combining PE's numbers is wiring, introducing one of our own is a hybrid.
 - Overriding `household_eligible(self, e)` to place a household-level PE figure once, when a per-member override can't express it. It runs after member eligibility, so `e.eligible_members` is populated — that's how `MoChip` charges a single household premium against a per-child gross.
 
@@ -188,32 +188,20 @@ Do not write a partial override while waiting for that decision.
 
 Paths below use `{PROGRAM_DIR}` for whichever of the two locations in **Where things live** applies — `programs/programs/cross_white_label/{family}` for a shared program, `programs/programs/white_labels/{state}/{program}` for a state-only one.
 
-Write the following two files:
+Write the spec. The program record stays in program-ops — it is imported from there in Phase 6, and never copied into benefits-api.
 
-**Spec** — write the markdown from the ticket attachment exactly as-is:
+**Spec** — write the markdown exactly as-is:
 ```text
 benefits-api/{PROGRAM_DIR}/specs/{state}.md      # shared program
 benefits-api/{PROGRAM_DIR}/spec.md              # state-only program
 ```
 
-**Initial config** — write the JSON from the ticket attachment exactly:
-```text
-benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
-```
+> A pure federal passthrough with no state-level divergence has no `spec.md` and no Test Scenarios ticket comment — it is record only (the `ks_ssi` precedent). In that case skip this phase, and in Phase 5 write a single smoke test instead of a scenario suite.
 
-> A pure federal passthrough with no state-level divergence has no `spec.md` and no Test Scenarios ticket comment — it is config only (the `ks_ssi` precedent). In that case write just the config file, and in Phase 5 write a single smoke test instead of a scenario suite.
-
-After writing the file(s), commit. Stage the specific files (not `git add .`/`-A`) so an auto-formatter doesn't sweep unrelated changes into the commit:
+Commit the spec. Stage the specific file (not `git add .`/`-A`) so an auto-formatter doesn't sweep unrelated changes into the commit:
 ```bash
 git add benefits-api/{PROGRAM_DIR}/specs/{state}.md
-git add benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
-git commit -m "Add {state} {program} research files"
-```
-
-For a config-only federal passthrough there is no `spec.md`, so stage the config alone — `git add` fails on a path that doesn't exist:
-```bash
-git add benefits-api/programs/management/commands/import_program_config_data/data/{state}_{program}_initial_config.json
-git commit -m "Add {state} {program} config"
+git commit -m "Add {state} {program} spec"
 ```
 
 ## Phase 4: Implement the Program
@@ -377,19 +365,30 @@ Review the cassettes before committing — they should contain exactly one `hous
 
 Run all commands from the `benefits-api/` directory. Use `venv/bin/python` for all `manage.py` commands — `python` may not resolve in non-interactive shells.
 
-### 6.1 Import the initial config
+### 6.1 Import the program record
 
-Read `benefits-api/programs/management/commands/import_program_config.py` to understand the command's interface, then run it for the new config file.
+From `program-ops/`, with `benefits-api/` beside it on this branch (the import only creates a program whose calculator is registered, so it has to run against this branch's code):
 
-- If you encounter any errors during import, fix them and commit the fixes before continuing.
+```bash
+python3 scripts/import_programs.py --env local --dry-run-only --program {key}
+python3 scripts/import_programs.py --env local --program {key}
+```
+
+The dry run lists anything that blocks the import (an unknown key, a partial entry, a missing poverty table). A fix to the record goes in a program-ops PR, never into benefits-api.
 
 ### 6.2 Activate the program
 
-The config must carry `"active": true` — omitting it imports the program inactive. Confirm the `Program` row reflects it after import.
+An import never switches a program on or off: a new program is created switched off, and a record carrying `active` is rejected. Switch it on locally to test:
+
+```bash
+venv/bin/python manage.py shell -c "from programs.models import Program; Program.objects.filter(name_abbreviated='{key}').update(active=True)"
+```
+
+On staging and prod, switching it on is an admin decision made after the import there.
 
 ## Phase 7: "Already Have" Screener Step (Conditional)
 
-Decide whether this program should appear as a tile on the "I already have this benefit" screener step. This is driven entirely by the `Program` row's `show_in_has_benefits_step` flag, set from the program's `initial_config.json` at import time — there is **no** white-label `category_benefits` edit, **no** `has_*` column/serializer/frontend work. (Current benefits live in the `CurrentBenefit` join table, read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
+Decide whether this program should appear as a tile on the "I already have this benefit" screener step. This is driven entirely by the `Program` row's `show_in_has_benefits_step` flag, set from the program's record at import time — there is **no** white-label `category_benefits` edit, **no** `has_*` column/serializer/frontend work. (Current benefits live in the `CurrentBenefit` join table, read via `screen.has_benefit(...)` / `screen.has_base_benefit(...)`.)
 
 **The criterion is functional, not size-based.** A program belongs on this step only if knowing a household already receives it changes the eligibility result of *another* program — i.e. it confers categorical/presumed eligibility (or is a disqualifier) elsewhere. It does **not** have to be a "major" program; a large program nothing else keys off of doesn't belong here. Don't guess from prominence — verify:
 
@@ -401,11 +400,11 @@ Decide whether this program should appear as a tile on the "I already have this 
    ```
    A hit means another calculator reads this benefit's state → it needs `show_in_has_benefits_step: true`. **But no hit is not proof it's unneeded** — the program is new, so nothing could have referenced it yet. Always also do check #2.
 
-2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies written ahead of it — usually none. Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (`programs/programs/cross_white_label/`, `programs/programs/white_labels/{state}/`, and the program config). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
+2. **Should it confer eligibility on any program we already have — even if our code doesn't reflect that yet?** Because this program is new, check #1 can only find dependencies written ahead of it — usually none. Verify with the program's spec **and an up-to-date web search of its official eligibility policy** (don't rely on training data — rules change), then compare against the programs we offer (`programs/programs/cross_white_label/`, `programs/programs/white_labels/{state}/`, and the program records in program-ops). If receipt of this program *should* gate one of ours but no calculator reads it, that's a missing dependency: flag it so the existing calculator is updated to read `has_benefit("<this program>")` **and** this program gets `show_in_has_benefits_step: true` — don't silently leave it off.
 
 Then:
 
-- If either check says yes, set `"show_in_has_benefits_step": true` (and `"active": true`) in the program's `initial_config.json` and re-run the program config import so the `Program` row reflects it. The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields.
+- If either check says yes, set `"show_in_has_benefits_step": true` in the program's record (a program-ops PR) and re-run the Phase 6.1 import so the `Program` row reflects it. The tile's display name, description, and category grouping come from the program's own `name`, `website_description`, and `category` fields.
 - Otherwise (the common case), leave `show_in_has_benefits_step: false` and move on.
 
 ## Phase 8: Open a PR
@@ -426,6 +425,7 @@ Opening the PR is part of this workflow — always complete this phase.
      --assignee @me
    ```
 5. Include a link to the Linear ticket in the PR body (under **Context & Motivation**) when the program came from a ticket.
+6. Under **Deployment**, list the import: once this is deployed to staging and the record is on program-ops `main`, run `python3 scripts/import_programs.py --env staging --program {key}` from program-ops, then switch the program on in the admin.
 
 ## Phase 9: Comment QA Scenarios on Linear Ticket
 
@@ -437,7 +437,7 @@ Opening the PR is part of this workflow — always complete this phase.
    ```
    The comment body must be the extracted markdown exactly as written — no reformatting, no summarizing.
 
-Skip this phase for a config-only federal passthrough (no spec, no scenarios).
+Skip this phase for a record-only federal passthrough (no spec, no scenarios).
 
 ## Phase 10: Summary and Next Steps
 
