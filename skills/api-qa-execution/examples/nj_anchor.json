@@ -1,0 +1,632 @@
+{
+  "program": "nj_anchor",
+  "title": "ANCHOR Property Tax Relief (NJ)",
+  "white_label": "nj",
+  "zipcode": "08608",
+  "county": "Mercer County",
+  "spec": "program-ops programs/white_labels/nj/anchor/nj_anchor_spec.md (main), section 8",
+  "scenarios": [
+    {
+      "n": 1,
+      "title": "Homeowner, property tax above the cap",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              60000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "propertyTax",
+          9000,
+          "yearly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 1500
+      }
+    },
+    {
+      "n": 2,
+      "title": "Homeowner, property tax below the cap",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              60000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "propertyTax",
+          1200,
+          "yearly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 1200
+      }
+    },
+    {
+      "n": 3,
+      "title": "Homeowner at 150,000",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              150000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "propertyTax",
+          8000,
+          "yearly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 1500
+      }
+    },
+    {
+      "n": 4,
+      "title": "Homeowner one dollar over 150,000",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              150001,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "propertyTax",
+          8000,
+          "yearly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 1000
+      }
+    },
+    {
+      "n": 5,
+      "title": "Homeowner at 250,000",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              250000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "propertyTax",
+          8000,
+          "yearly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 1000
+      }
+    },
+    {
+      "n": 6,
+      "title": "Homeowner one dollar over 250,000",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              250001,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "propertyTax",
+          8000,
+          "yearly"
+        ]
+      ],
+      "expect": {
+        "eligible": false
+      }
+    },
+    {
+      "n": 7,
+      "title": "Homeowner, mortgage only",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              80000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "mortgage",
+          2000,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 1500
+      }
+    },
+    {
+      "n": 8,
+      "title": "No rent, mortgage or property tax",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              60000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [],
+      "expect": {
+        "eligible": false
+      }
+    },
+    {
+      "n": 9,
+      "title": "Renter, 64 at the end of 2025",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age_end_of_year": {
+            "year": 2025,
+            "age": 64
+          },
+          "income": [
+            [
+              "wages",
+              40000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          1500,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 450
+      }
+    },
+    {
+      "n": 10,
+      "title": "Renter, 65 at the end of 2025",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age_end_of_year": {
+            "year": 2025,
+            "age": 65
+          },
+          "income": [
+            [
+              "sSRetirement",
+              24000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          1000,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 700
+      }
+    },
+    {
+      "n": 11,
+      "title": "Renter at 150,000",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 40,
+          "income": [
+            [
+              "wages",
+              150000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          2000,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 450
+      }
+    },
+    {
+      "n": 12,
+      "title": "Renter one dollar over 150,000",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 40,
+          "income": [
+            [
+              "wages",
+              150001,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          2000,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": false
+      }
+    },
+    {
+      "n": 13,
+      "title": "Rent and mortgage at 200,000",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              200000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          1000,
+          "monthly"
+        ],
+        [
+          "mortgage",
+          1500,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": false
+      }
+    },
+    {
+      "n": 14,
+      "title": "Renter couple, only the spouse 65+",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 60,
+          "income": [
+            [
+              "wages",
+              50000,
+              "yearly"
+            ]
+          ]
+        },
+        {
+          "rel": "spouse",
+          "age_end_of_year": {
+            "year": 2025,
+            "age": 66
+          }
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          1200,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 700
+      }
+    },
+    {
+      "n": 15,
+      "title": "Renter couple, spouse's SSDI excluded",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 50,
+          "income": [
+            [
+              "wages",
+              130000,
+              "yearly"
+            ]
+          ]
+        },
+        {
+          "rel": "spouse",
+          "age": 52,
+          "income": [
+            [
+              "sSDisability",
+              30000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          1500,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 450
+      }
+    },
+    {
+      "n": 16,
+      "title": "Renter with an earning adult child",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 55,
+          "income": [
+            [
+              "wages",
+              100000,
+              "yearly"
+            ]
+          ]
+        },
+        {
+          "rel": "child",
+          "age": 25,
+          "income": [
+            [
+              "wages",
+              60000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          1800,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 450
+      }
+    },
+    {
+      "n": 17,
+      "title": "Renter couple over the limit combined",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 40,
+          "income": [
+            [
+              "wages",
+              100000,
+              "yearly"
+            ]
+          ]
+        },
+        {
+          "rel": "spouse",
+          "age": 40,
+          "income": [
+            [
+              "wages",
+              60000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          1500,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": false
+      }
+    },
+    {
+      "n": 18,
+      "title": "Renter with a domestic partner",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 40,
+          "income": [
+            [
+              "wages",
+              100000,
+              "yearly"
+            ]
+          ]
+        },
+        {
+          "rel": "domesticPartner",
+          "age_end_of_year": {
+            "year": 2025,
+            "age": 66
+          },
+          "income": [
+            [
+              "wages",
+              60000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "rent",
+          1500,
+          "monthly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 450
+      }
+    },
+    {
+      "n": 19,
+      "title": "Homeowner, 66 at the end of 2025",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age_end_of_year": {
+            "year": 2025,
+            "age": 66
+          },
+          "income": [
+            [
+              "wages",
+              60000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "propertyTax",
+          9000,
+          "yearly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 1500
+      }
+    },
+    {
+      "n": 20,
+      "title": "Mortgage and property tax below the cap",
+      "members": [
+        {
+          "rel": "headOfHousehold",
+          "age": 45,
+          "income": [
+            [
+              "wages",
+              60000,
+              "yearly"
+            ]
+          ]
+        }
+      ],
+      "expenses": [
+        [
+          "mortgage",
+          1500,
+          "monthly"
+        ],
+        [
+          "propertyTax",
+          1200,
+          "yearly"
+        ]
+      ],
+      "expect": {
+        "eligible": true,
+        "annual": 1200
+      }
+    }
+  ]
+}
