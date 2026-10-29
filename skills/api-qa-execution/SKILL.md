@@ -74,8 +74,8 @@ If Linear MCP is not available, STOP and notify the user.
 - If no key resolves, ask the user.
 
 **Production: hand over, never run.** Don't send any request to production (`cobenefits-api`), read-only or not. For `production`:
-1. Write the scenario file (Phase 4). The expected results are in it.
-2. Hand David the file and the runner's production command (Phase 4). He runs it and shares the report.
+1. Write the script (Phase 3) with the expected results in it, reading the key from `PRODUCTION_API_KEY` and asking him to type `prod` before it sends anything.
+2. Hand David the script and the command to run it. He runs it and shares the report.
 
 ---
 
@@ -247,7 +247,7 @@ A federal program's scenarios run as test screens on the `federal` white label, 
 - **For a federal program replacing state rows,** QA after the switch-over migration has run (state rows off, federal row on). Add three checks:
   - a state white-label screen shows the program **once**, under its federal key, with no state row;
   - a household holding the federal key in `current_benefits` comes back `already_has: true`;
-  - a `co_tax_calculator` screen (the Get Ahead apps send no `pregnant`, no birth dates and few other fields) still calculates the program, if the program applies there. Give the check `"age_only": true` and each member `"pregnant": null`; otherwise the runner sends birth dates and `pregnant: false`, and the check proves nothing.
+  - a `co_tax_calculator` screen (the Get Ahead apps send no `pregnant`, no birth dates and few other fields) still calculates the program, if the program applies there. Send each member's `age` with no `birth_year` or `birth_month`, and `pregnant: null`; with birth dates or `pregnant: false` the check proves nothing.
 
 **Current benefits:** a list of `name_abbreviated` values for the white label the screen uses; `[]` when the household has none.
 
@@ -301,7 +301,7 @@ A federal program's scenarios run as test screens on the `federal` white label, 
 | per year / yearly / annually | `yearly` |
 | per week / weekly / every week | `weekly` |
 | biweekly / every two weeks | `biweekly` |
-| hourly | `hourly`, with hours worked per week as a 4th element: `["wages", 20, "hourly", 30]` |
+| hourly | `hourly`, plus `hours_worked` (per week) on the stream; without it the API treats the income as malformed and drops programs |
 
 **Insurance mapping** (spec text → insurance object field):
 | Spec Text | Field to set `true` |
@@ -342,7 +342,7 @@ A state screen resolves names among its own programs **and** the federal ones (t
 
 **Note:** For the exact `name_abbreviated` a given white label uses, check the program's record in program-ops (`program.name_abbreviated` in `programs/**/*_program_record.json`) or query the `programs_program` table. The serializer resolves each entry against `(white_label, name_abbreviated)` and **silently drops** any name that white label has no `Program` for — so a typo or a name from the wrong white label just vanishes with no error. Any benefit the white label has a program for can be set here; it does not have to be one that renders as a visible tile on the current-benefits step.
 
-**A benefit the white label doesn't have can't be tested there.** A new white label often lacks SNAP or TANF (NJ at launch). The runner compares the names it sent with the `current_benefits` the POST returns and marks a scenario **BLOCKED** when one was dropped, so it never reads as a calculator failure. If you know beforehand, set `blocked` on the scenario (Phase 4). Where another input expresses the same route (TANF as `cashAssistance` income), add it as a `checks` entry so the route is still exercised.
+**A benefit the white label doesn't have can't be tested there.** A new white label often lacks SNAP or TANF (NJ at launch). Compare the names you sent with the `current_benefits` the POST returns, and mark a scenario **BLOCKED** when one was dropped, so it never reads as a calculator failure (Phase 3). Where another input expresses the same route (TANF as `cashAssistance` income), add it as a `checks` entry so the route is still exercised.
 
 **Expenses mapping** (spec text → expense object in `expenses` array):
 
@@ -386,14 +386,14 @@ Expense `frequency` uses the same values as income: `monthly`, `weekly`, `biweek
 | Veteran | `veteran: true` |
 | Visually impaired | `visually_impaired: true` |
 
-Send every flag on every member, `false` where the scenario doesn't set it: the screener sends `false` for an unticked box. A flag left out is null, and a program declaring it is dropped as a missing field. The runner does this; send `null` only to test a missing answer.
+Send every flag on every member, `false` where the scenario doesn't set it: the screener sends `false` for an unticked box. A flag left out is null, and a program declaring it is dropped as a missing field. Send `null` only to test a missing answer.
 
 **Age → birth_year/birth_month calculation:**
 ```
 birth_month = 1  (default, unless spec provides explicit month)
 birth_year = current_year - age, minus 1 more if birth_month is later than the current month
 ```
-The runner does this from `age` and `birth_month`, so `age` stays today's age.
+Send `age` as today's age. A birth month later than the current month otherwise lands a year off, and an infant's birth date in the future (400).
 If the spec says "Birth month/year: June 2022", use `birth_month: 6, birth_year: 2022` directly and calculate age from that.
 
 **County naming rules:**
@@ -405,261 +405,44 @@ If the spec says "Birth month/year: June 2022", use `birth_month: 6, birth_year:
 
 ---
 
-### Phase 3: Execute API Calls
+### Phase 3: Run the scenarios
 
-For each scenario, execute this two-step API flow:
+Write one Python script for the run, in `~/main/qa/{TICKET-ID}-{program_key}-qa.py`. Call the API with `curl` through `subprocess` (urllib fails Heroku's certificates). Follow these rules:
 
-#### Step 1: Create Screen
+**Payloads**
+- One screen per scenario, sequentially: `POST /api/screens/`, then `GET /api/eligibility/{uuid}`.
+- Build each payload by the Phase 2 rules: every condition flag `false` unless set, `age` as today's age, `expenses: []` when there are none, a full insurance map, no location on `federal`.
+- Keep each scenario's expected outcome and annual value beside its payload, so the script carries its own expectations when it's handed over.
 
-```bash
-curl -s -X POST "${API_BASE}/api/screens/" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Token ${API_KEY}" \
-  -d '${PAYLOAD_JSON}'
-```
+**Keys**
+- Read the key in-process (Environment Configuration). Never print, log or write it.
+- Pass the auth header to curl on stdin (`-H @-`), not as an argument, and don't use `-k`.
+- A 401 or 403 stops the run.
 
-**Expected response:** `201 Created` with JSON body containing `uuid` field.
+**Results**
+- Match `name_abbreviated` against the spec's Program Key. `already_has: true` → Not eligible; `eligible: true` → Eligible; otherwise Not eligible; absent → Not found.
+- **PASS:** the outcome matches, and for an expected Eligible with a value, the value is within the rounding tolerance (Phase 1 step 5). Not found passes an expected Not eligible only when `missing_programs` is false.
+- **ERROR** (not judged): the POST isn't `201`; the eligibility GET isn't a `200` with a `programs` list after one retry of an empty or HTML reply; or the target is absent with `missing_programs: true`. A failed eligibility call is never read as Not found.
+- **BLOCKED** (outside the pass rate): a name sent in `current_benefits` is missing from the POST response's `current_benefits`, or the environment can't express the scenario yet. Name the reason, and the ticket that unblocks it.
+- **Never returned:** if the target is Not found in every scenario that reached the API, the run fails. Check the program is imported and active, and that the payloads supply every field it declares.
+- Write results after each scenario, so an error mid-run loses nothing.
 
-**Error handling:**
-- `400 Bad Request` → Log validation errors, mark scenario as ERROR, continue to next
-- `401 Unauthorized` → STOP all execution, API key is invalid
-- `500 Server Error` → Log error, mark scenario as ERROR, continue to next
-
-Extract `uuid` from response.
-
-#### Step 2: Fetch Eligibility Results
-
-```bash
-curl -s -X GET "${API_BASE}/api/eligibility/${UUID}" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Token ${API_KEY}"
-```
-
-**Expected response:** `200 OK` with JSON body containing `programs` array.
-
-#### Step 3: Evaluate Results
-
-Find the target program in the `programs` array by matching `name_abbreviated` against the spec's **Program Key** (e.g. `federal_wic`, `nj_head_start`). Don't derive it from the state and program names.
-
-**Determine result:**
-- If program found and `already_has == true` → Actual = "Not eligible" (frontend suppresses it; household already enrolled)
-- If program found and `eligible == true` and `already_has == false` → Actual = "Eligible"
-- If program found and `eligible == false` → Actual = "Not eligible"
-- If program NOT found in response → Actual = "Not found" (this is a FAIL unless expected was "Not eligible")
-
-**Compare eligibility:**
-- Expected "Eligible" vs Actual "Eligible" → **PASS** (eligibility)
-- Expected "Not eligible" vs Actual "Not eligible" → **PASS** (eligibility)
-- Expected "Not eligible" vs Actual "Not found" → **PASS** only when `missing_programs` is false. With it true the program may have been dropped rather than judged, so it's **ERROR**.
-- If the program is "Not found" in every scenario, the run **fails**: no scenario judged it, and each "Not eligible" pass was only its absence.
-- Any mismatch → **FAIL**
-
-**Compare estimated value (when spec provides one):**
-If the scenario's `expected_estimated_value` is not null AND the eligibility result is "Eligible":
-- Extract `estimated_value` from the matched program object in the API response (integer field)
-- If `actual_estimated_value` is within the rounding tolerance of `expected_estimated_value` (Phase 1 step 5) → value match: **PASS**
-- Otherwise → value match: **FAIL**; record both values
-- If expected_estimated_value is null (spec didn't specify), skip value comparison — value match: **N/A**
-- If scenario is "Not eligible", skip value comparison — value match: **N/A**
-
-**Overall scenario result:** A scenario is **PASS** only if BOTH eligibility and value match pass (or value match is N/A). If either fails, the scenario is **FAIL**.
-
-**`already_has` note:** The API returns `eligible: true` alongside `already_has: true` when a household already has a benefit (i.e. the program's `name_abbreviated` is in the screen's `current_benefits`). The platform suppresses these on the frontend — they never appear as new results. Treat `already_has: true` as "Not eligible" for comparison purposes. For "Currently receiving" scenarios in the spec, this is the correct pass condition.
-
-#### Step 4: Record Result
-
-For each scenario, capture:
-- Scenario number and description
-- Expected vs actual eligibility outcome
-- Expected vs actual estimated value (if spec provided one)
-- PASS/FAIL status (considering both eligibility and value match)
-- Screen UUID (for debugging: `${API_BASE}/api/screens/${UUID}`)
-- Eligibility URL (for debugging: `${API_BASE}/api/eligibility/${UUID}`)
-- If FAIL (eligibility): the `failed_tests` and `passed_tests` arrays from the program result
-- If FAIL (value): both expected and actual estimated values
-- If program found: `estimated_value` for informational purposes (even when spec doesn't specify one)
-
-#### Step 5: Update Progress
-
-Mark scenario complete in todo list and move to next.
-
----
-
-### Phase 4: Execute with the runner
-
-Don't hand-write a script. Write a **scenario file** and run the bundled `runner.py` (in this skill's directory). The runner does the API work the same way every time: it reads the key without printing it, calls curl with `-k` and timeouts, retries Heroku's HTML 503 replies, reports a failed eligibility call as ERROR (never as "Not found"), polls while `missing_programs` is pending, applies the rounding tolerance, and writes the reports.
-
-**1. Write the scenario file** to `~/main/qa/{TICKET-ID}-{program_key}-scenarios.json`, translating spec section 8 scenario by scenario. Model it on `examples/federal_wic.json` (federal, a state override, checks) or `examples/nj_anchor.json` (state, expenses, year-end ages).
-
-```json
-{
-  "program": "nj_anchor",
-  "title": "ANCHOR Property Tax Relief (NJ)",
-  "spec": "program-ops programs/white_labels/nj/anchor/nj_anchor_spec.md (main), section 8",
-  "white_label": "nj", "zipcode": "08608", "county": "Mercer County",
-  "scenarios": [
-    {"n": 9, "title": "Renter, 64 at the end of 2025",
-     "members": [{"rel": "headOfHousehold", "age_end_of_year": {"year": 2025, "age": 64},
-                  "income": [["wages", 40000, "yearly"]]}],
-     "expenses": [["rent", 1500, "monthly"]],
-     "expect": {"eligible": true, "annual": 450}}
-  ],
-  "checks": []
-}
-```
-
-- **File level:** `program` (the spec's Program Key), `white_label`, and `zipcode` + `county` for a state white label (sent when given; never on `federal`; `_default` takes none). `title` and `spec` go in the report.
-- **Scenario:** `n`, `title`, `members`, `expect`. Optional: `white_label` / `zipcode` / `county` (per-scenario override, e.g. a federal scenario whose current benefit is a state program), `expenses` (`[type, amount, frequency]`), `current_benefits`, `household_size` (default: number of members), `household_assets`, `age_only` (send each member's age without a birth year or month, as the Get Ahead apps do; use it on a `co_tax_calculator` screen), `blocked` (a reason; the scenario isn't sent and is reported BLOCKED, outside the pass rate. Use it for a scenario the environment can't express yet, name the ticket that unblocks it, and remove it once that ships).
-- **Member:** `rel`, then `age` (today's age) or `age_end_of_year` (`{"year": 2025, "age": 64}`, which sets the birth year to year − age). Optional: `birth_month` (default 1; the birth year shifts so `age` is still today's age), `income` (`[type, amount, frequency]`, or `[type, amount, "hourly", hours_per_week]`), `insurance` (list of types; default `["none"]`), and the flags `pregnant`, `student`, `student_full_time`, `disabled`, `long_term_disability`, `unemployed`, `veteran`, `visually_impaired` (each sent as `false` unless set, as the screener does).
-- **`expect`:** `eligible` (true/false), `annual` (expected annual dollars, from Phase 1 step 5), `units` (eligible members for a per-member value, default 1; that's the rounding tolerance).
-- **`checks`** (optional), with the same screen fields plus `type`:
-  - `result`: like a scenario, but reported as a check;
-  - `shows_once`: exactly one program whose name contains `match` comes back, and it's the program;
-  - `already_has`: the program comes back with `already_has: true`.
-
-  Federal replacements use all three (Phase 2).
-
-Unknown keys fail before any API call, with the allowed keys listed.
-
-**2. Run it** from this skill's directory:
-
-```bash
-python3 runner.py ~/main/qa/{TICKET-ID}-{program_key}-scenarios.json --env staging --ticket {TICKET-ID}
-python3 runner.py … --env local --ticket {TICKET-ID}        # key: LOCAL_API_KEY, or the local DB's DRF token
-python3 runner.py … --only 3,4                               # rerun some scenarios (skips checks)
-```
-
-It prints one line per scenario and writes `~/main/qa/{TICKET-ID}-{program}-{env}-results.json` and `.md`. Exit status: 0 if everything passed, 1 if anything failed, 2 if the scenario file was invalid.
-
-**Production:** never run it. Hand David the scenario file and this command, run from team-claude-config:
-
-```bash
-PRODUCTION_API_KEY=… python3 skills/api-qa-execution/runner.py ~/main/qa/{TICKET-ID}-{program_key}-scenarios.json --env production --ticket {TICKET-ID}
-```
-
-It asks him to type `prod` before sending anything. He shares the report.
-
-**3. Review failures** in the report's Failures section, which includes the payload and the program's `failed_tests` / `passed_tests`. Check the scenario file's translation before blaming the calculator: a wrong birth year, frequency or insurance type is the usual cause. For a scenario with current benefits, confirm what was saved. The report's BLOCKED rows name any dropped name, and locally you can read it directly: `Screen.objects.get(uuid=...).current_benefits.values_list("program__name_abbreviated", flat=True)`.
-
-BLOCKED scenarios are listed in their own section with the reason. Pass them on, with the ticket that unblocks each, in the results and the ticket comment.
+**Failures:** check the payload before blaming the calculator; a wrong birth year, frequency or insurance type is the usual cause. Locally, `Screen.objects.get(uuid=...).current_benefits.values_list("program__name_abbreviated", flat=True)` shows what was saved.
 
 ---
 
 ## Results Documentation
 
-The runner writes this report. The format below is what it produces; extend it by hand only for notes the runner can't know (setup, staging state, follow-ups).
+Write `~/main/qa/{TICKET-ID}-{program}-{env}-results.md` (add a suffix when a second run would overwrite one). It holds:
 
-### Results File Format
-
-`~/main/qa/{TICKET-ID}-{program}-{env}-results.md`
-
-```markdown
-# API QA Test Results - [Program Name] - [State]
-
-**Linear Ticket:** [{TICKET-ID}](linear-ticket-url)
-**Test Date:** [Current Date]
-**Environment:** [STAGING/PRODUCTION/LOCAL]
-**API Base:** [API base URL]
-**Tester:** API QA Automation
-
-## Test Scenarios
-
-| # | Description | Expected | Actual | Exp. Value | Act. Value | Value Match | Result | Screen UUID |
-|---|-------------|----------|--------|------------|------------|-------------|--------|-------------|
-| 1 | Single parent, low income | Eligible | Eligible | 828 | 828 | PASS | PASS | abc-123 |
-| 2 | Income boundary | Eligible | Eligible | 828 | 1,200 | FAIL | FAIL | def-456 |
-| 3 | Child too young | Not eligible | Not eligible | — | — | N/A | PASS | ghi-789 |
-| 4 | Income too high | Not eligible | Eligible | — | 10,517 | N/A | FAIL | jkl-012 |
-| 5 | Warning message display | — | — | — | — | — | SKIPPED | — |
-| 6 | Basic eligible, no value in spec | Eligible | Eligible | N/A | 10,517 | N/A | PASS | mno-345 |
-```
-
-Frontend-only scenarios appear in the table as `SKIPPED` with dashes for all result columns, keeping the scenario numbering consistent with the spec.
-
-### Failure Details
-
-For each FAIL, append detailed diagnostics:
-
-```markdown
-### Scenario 2: Income Boundary — FAIL (Value Mismatch)
-
-**Expected:** Eligible (value: 828)
-**Actual:** Eligible (value: 1,200)
-**Value Match:** FAIL — expected 828, got 1,200
-**Screen:** {API_BASE}/api/screens/{uuid}
-**Eligibility:** {API_BASE}/api/eligibility/{uuid}
-
-**Analysis:** Eligibility is correct, but calculator is returning 1,200 instead of expected 828. Check benefit value formula — spec expects 4.60/lunch × 180 days = 828 per child.
-
----
-
-### Scenario 4: Income Too High — FAIL (Eligibility Mismatch)
-
-**Expected:** Not eligible
-**Actual:** Eligible (estimated value: 10,517)
-**Screen:** {API_BASE}/api/screens/{uuid}
-**Eligibility:** {API_BASE}/api/eligibility/{uuid}
-
-**Passed tests:** age_eligible, household_size_valid
-**Failed tests:** (none — all passed, but shouldn't have)
-
-**Payload sent:**
-```json
-{ ... the exact JSON payload ... }
-```
-
-**Analysis:** Income threshold check may not be working. Household monthly income 5,000 exceeds 100% FPL for household of 2.
-```
-
-### Summary Section
-
-```markdown
-## Summary
-
-- **Total Scenarios:** 11
-- **API-Tested:** 9
-- **Passed:** 7
-- **Failed:** 2
-  - Eligibility mismatches: 1
-  - Value mismatches: 1
-- **Errors:** 0 (API failures)
-- **Frontend-Only (skipped):** 2
-- **Pass Rate:** 77.8% (7/9 API-tested scenarios)
-
-## Failed Scenarios
-
-1. **Scenario 2** — Value mismatch: expected 828, got 1,200 (eligibility correct)
-2. **Scenario 4** — Income too high but still shown as eligible
-
-## Recommendations
-
-- Fix benefit value calculation — Scenario 2 returns 1,200 but spec expects 828
-- Fix income threshold validation in calculator
-- Re-run after fixes: `/api-qa-execution MFB-1234 staging`
-```
-
-### Frontend-Only Scenarios Section
-
-After the Summary, include a section listing all scenarios that were skipped because they require browser testing. This section is always present — if no scenarios were skipped, state "None — all scenarios were API-testable."
-
-```markdown
-## Frontend-Only Scenarios (Requires Browser Testing)
-
-The following scenarios were skipped because they test conditions that can only be verified in the browser. Check them manually in a browser.
-
-| # | Description | Reason Skipped |
-|---|-------------|----------------|
-| 5 | Warning message about citizenship requirement | Tests display of warning_message text — requires visual verification |
-| 9 | Program card appears in Healthcare category | Tests result page category grouping — frontend rendering concern |
-
-### How to test these scenarios
-
-To check one manually:
-- Navigate to the screener for the appropriate white label
-- Enter the household data from the scenario steps
-- Submit and verify the results page for the expected display behavior
-- Values display as annual/12 rounded to whole dollars, so a spec's monthly cents value (129.78) shows rounded (130)
-```
+- **Header:** program name and key, ticket, date, environment, API base, and the spec's path and branch.
+- **Scenarios table:** `| # | Description | White label | Expected | Actual | Exp. Value | Act. Value | Value Match | Result | Screen UUID |`. Values are annual whole dollars. Frontend-only scenarios appear as `SKIPPED`, keeping the spec's numbering.
+- **Checks table**, when there are checks (federal replacements): check, white label, result, detail, screen UUID.
+- **Summary:** passed, failed, errors, blocked and skipped counts, and the pass rate over judged scenarios (blocked and skipped excluded).
+- **Program never returned**, when it applies.
+- **Blocked:** each scenario with its reason and unblocking ticket.
+- **Failures:** per FAIL or ERROR, expected vs actual with values, the eligibility URL, the payload, `failed_tests` / `passed_tests`, and a one-line analysis.
+- **Frontend-Only Scenarios:** always present ("None" if every scenario was API-testable), each with the reason it needs a browser. Values display as annual/12 rounded to whole dollars, so a spec's 129.78/month shows as 130.
 
 ---
 
@@ -689,7 +472,7 @@ If eligibility returns error or empty programs array:
 
 - **`missing_programs: true` means a program on the screen was dropped**, not that it is still computing. The eligibility endpoint calculates within the request; a program is dropped for a missing screener field, no calculator, or a missing program it gates on (`screener/views.py::eligibility_results`). The flag covers the whole screen, so another program's drop sets it too.
 
-- **The runner polls briefly, then reports a still-absent target as ERROR** when `missing_programs` is true. Locally, the screen's latest `EligibilitySnapshot.dropped_programs` names each dropped program and why.
+- **An absent target with `missing_programs: true` is ERROR.** Locally, the screen's latest `EligibilitySnapshot.dropped_programs` names each dropped program and why.
 
 - **If `missing_programs: false` and program absent**: the program is genuinely not in the result set — not a timing issue. Treat as "Not eligible" per the normal evaluation rules.
 
