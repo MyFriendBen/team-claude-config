@@ -1,6 +1,6 @@
 ---
 name: pe-cassette-refresh
-description: Weekly PolicyEngine drift check for benefits-api. Re-records every PolicyEngine spec-scenario cassette at PE `frontier` (early warning) and `current` (adoption), opens a draft PR adopting the programs whose values didn't change, and files one Linear rollup ticket for value changes plus a separate Urgent ticket per screener-breaking change. Run by the on-call dev on Thursdays, or whenever PolicyEngine promotes a release.
+description: Weekly PolicyEngine drift check for benefits-api. Re-records every PolicyEngine spec-scenario cassette at PE `frontier` (early warning) and `current` (adoption), opens a PR adopting the programs whose values didn't change, and files one Linear rollup ticket for value changes plus a separate Urgent ticket per screener-breaking change. Run by the on-call dev on Thursdays, or whenever PolicyEngine promotes a release.
 usage: /pe-cassette-refresh [--dry-run]
 example: /pe-cassette-refresh
 ---
@@ -9,7 +9,7 @@ example: /pe-cassette-refresh
 
 # PolicyEngine Cassette Refresh
 
-PolicyEngine (PE) serves only what `current` and `frontier` resolve to, and staging and prod ride `current` with no pin. So a PE release changes what households see the day PE promotes it. This skill measures that change against our spec scenarios and turns it into a draft PR and tickets.
+PolicyEngine (PE) serves only what `current` and `frontier` resolve to, and staging and prod ride `current` with no pin. So a PE release changes what households see the day PE promotes it. This skill measures that change against our spec scenarios and turns it into a PR and tickets.
 
 - **Who:** the on-call dev, every Thursday. PE releases usually land Tuesday–Wednesday.
 - **Triage SLA:** the rollup is triaged by the following Monday and fixed in that week's release. Urgent tickets are hotfixes.
@@ -28,10 +28,10 @@ The mechanics live in benefits-api: `manage.py record_and_diff` (`programs/manag
 
 ## Step 1: Preflight
 
-Run from `~/main`. Stop at the first failure and tell the dev what to fix.
+Run from the root of the dev's benefits-api checkout. Stop at the first failure and tell the dev what to fix.
 
 ```bash
-cd ~/main/benefits-api
+API=$(git rev-parse --show-toplevel)             # the dev's benefits-api checkout
 git fetch -q origin
 redis-cli ping                                   # PONG; else: redis-server --daemonize yes
 grep -c -E '^POLICY_ENGINE_CLIENT_(ID|SECRET)=.' .env   # must print 2; never print the values
@@ -49,14 +49,15 @@ Record for the rest of the run:
 
 ## Step 2: Worktree
 
-Work in a fresh worktree off `origin/main`, inside `benefits-api/.claude/` (gitignored), so the dev's checkout is untouched and `.env` is found by walking up.
+Work in a fresh worktree off `origin/main`, inside `.claude/` (gitignored), so the dev's checkout is untouched and `.env` is found by walking up.
 
 ```bash
-cd ~/main/benefits-api
-WT=.claude/worktrees/pe-drift-$DATE
+cd $API
+WT=$API/.claude/worktrees/pe-drift-$DATE
 git worktree add -b pe-drift/$DATE $WT origin/main
+ln -s $API/venv $WT/venv                         # the pre-commit hook runs venv/bin/python; gitignored
 RUN=/tmp/pe-drift/$DATE
-PY=~/main/benefits-api/venv/bin/python           # the main checkout's venv; the worktree has none
+PY=$WT/venv/bin/python
 ```
 
 Run every later command from `$WT` with `$PY`.
@@ -84,7 +85,7 @@ cd $WT && $PY manage.py record_and_diff --target $CURRENT --out $RUN/current \
 
 **Current-pass changes are already live:** staging and prod serve `CURRENT` today. Frontier changes are coming.
 
-## Step 5: Verify and open the draft PR
+## Step 5: Verify and open the PR
 
 Skip if `git -C $WT status --porcelain` is empty.
 
@@ -94,14 +95,14 @@ cd $WT && VCR_MODE=none $PY -m pytest -q -p no:cacheprovider -m integration
 
 It must pass. A failure means adoption left a module inconsistent; stop and report it.
 
-Commit (`git commit --no-verify`; the repo's pre-commit hook is stale) and push `pe-drift/$DATE`. Unless `--dry-run`, open a draft PR titled `PE drift: adopt PolicyEngine $CURRENT ($DATE)`. Write the body to `$RUN/pr-body.md` (never a shared `/tmp` name), following `.github/pull_request_template.md`:
+Commit and push `pe-drift/$DATE`. If the black hook reformats a file, `git add` it and commit again. Unless `--dry-run`, open a PR titled `PE drift: adopt PolicyEngine $CURRENT ($DATE)`. Write the body to `$RUN/pr-body.md` (never a shared `/tmp` name), following `.github/pull_request_template.md`:
 - **Context & Motivation:** the weekly refresh; `PIN` → `CURRENT`; link the rollup ticket (Step 7).
 - **Changes Made:** adopted modules; held modules and why, linking the rollup.
 - **Testing:** "Strict replay (`VCR_MODE=none pytest -m integration`) passes." No migrations, config or env changes.
 - **Deployment:** none. Test-only change.
 - **Notes for Reviewers:** anything surprising from triage.
 
-Fill in the PR link after Step 7. `gh pr edit --body-file` flips a draft to ready, so run `gh pr ready --undo` straight after it.
+Fill in the rollup link after Step 7 with `gh pr edit --body-file $RUN/pr-body.md`.
 
 ## Step 6: Triage
 
@@ -134,7 +135,7 @@ Skip writes under `--dry-run`; print the drafts.
 **Rollup** (one per run; skip only if there are no findings and nothing carried forward):
 - Team **MFB General**, label `PE Drift`, priority High, title `PE drift rollup — week of <Monday of DATE>`.
 - Body:
-  - Header: run date, who ran it, `PIN` / `CURRENT` / `FRONTIER`, link to the draft PR.
+  - Header: run date, who ran it, `PIN` / `CURRENT` / `FRONTIER`, link to the PR.
   - **Live now (`CURRENT`)** and **Coming (`FRONTIER`)** sections. One subsection per program: a table of scenario / before / after, the class and its one-line reason, the spec citation, the PE changelog entry.
   - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording.
 
@@ -147,7 +148,7 @@ Skip writes under `--dry-run`; print the drafts.
 
 Report to the dev: the versions, counts per class, links to the PR, rollup and any Urgent tickets, and anything triage couldn't decide.
 
-Remove the worktree only once its branch is pushed (or under `--dry-run`): `git worktree remove $WT`. Keep `$RUN` until the rollup is triaged.
+Remove the worktree only once its branch is pushed (or under `--dry-run`): `rm $WT/venv && git worktree remove $WT`. Keep `$RUN` until the rollup is triaged.
 
 ## First run
 
