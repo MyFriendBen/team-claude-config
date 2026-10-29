@@ -382,6 +382,8 @@ Expense `frequency` uses the same values as income: `monthly`, `weekly`, `biweek
 | Veteran | `veteran: true` |
 | Visually impaired | `visually_impaired: true` |
 
+Send every flag on every member, `false` where the scenario doesn't set it: the screener sends `false` for an unticked box. A flag left out is null, and a program declaring it is dropped as a missing field. The runner does this; send `null` only to test a missing answer.
+
 **Age → birth_year/birth_month calculation:**
 ```
 birth_year = current_year - age
@@ -443,7 +445,8 @@ Find the target program in the `programs` array by matching `name_abbreviated` a
 **Compare eligibility:**
 - Expected "Eligible" vs Actual "Eligible" → **PASS** (eligibility)
 - Expected "Not eligible" vs Actual "Not eligible" → **PASS** (eligibility)
-- Expected "Not eligible" vs Actual "Not found" → **PASS** (program correctly excluded)
+- Expected "Not eligible" vs Actual "Not found" → **PASS** only when `missing_programs` is false. With it true the program may have been dropped rather than judged, so it's **ERROR**.
+- If the program is "Not found" in every scenario, the run **fails**: no scenario judged it, and each "Not eligible" pass was only its absence.
 - Any mismatch → **FAIL**
 
 **Compare estimated value (when spec provides one):**
@@ -502,7 +505,7 @@ Don't hand-write a script. Write a **scenario file** and run the bundled `runner
 
 - **File level:** `program` (the spec's Program Key), `white_label`, and `zipcode` + `county` for a state white label (sent when given; never on `federal`; `_default` takes none). `title` and `spec` go in the report.
 - **Scenario:** `n`, `title`, `members`, `expect`. Optional: `white_label` / `zipcode` / `county` (per-scenario override, e.g. a federal scenario whose current benefit is a state program), `expenses` (`[type, amount, frequency]`), `current_benefits`, `household_size` (default: number of members), `household_assets`, `blocked` (a reason; the scenario isn't sent and is reported BLOCKED, outside the pass rate. Use it for a scenario the environment can't express yet, name the ticket that unblocks it, and remove it once that ships).
-- **Member:** `rel`, then `age` (today's age) or `age_end_of_year` (`{"year": 2025, "age": 64}`, which sets the birth year to year − age). Optional: `birth_month` (default 1), `income` (`[type, amount, frequency]`), `insurance` (list of types; default `["none"]`), and the flags `pregnant`, `student`, `student_full_time`, `disabled`, `long_term_disability`, `unemployed`, `veteran`, `visually_impaired`.
+- **Member:** `rel`, then `age` (today's age) or `age_end_of_year` (`{"year": 2025, "age": 64}`, which sets the birth year to year − age). Optional: `birth_month` (default 1), `income` (`[type, amount, frequency]`), `insurance` (list of types; default `["none"]`), and the flags `pregnant`, `student`, `student_full_time`, `disabled`, `long_term_disability`, `unemployed`, `veteran`, `visually_impaired` (each sent as `false` unless set, as the screener does).
 - **`expect`:** `eligible` (true/false), `annual` (expected annual dollars, from Phase 1 step 5), `units` (eligible members for a per-member value, default 1; that's the rounding tolerance).
 - **`checks`** (optional), with the same screen fields plus `type`:
   - `result`: like a scenario, but reported as a check;
@@ -679,18 +682,18 @@ Log the error. Document as `ERROR` and continue.
 ### Eligibility Endpoint Fails
 If eligibility returns error or empty programs array:
 
-- **`missing_programs: true` means calculations are still in flight** — this flag indicates that one or more programs haven't finished computing yet. The target program may be completely absent from the `programs` array (not just returning `eligible: false` — literally not in the list). This is not an error; it means the calculation is async and hasn't finished. **Always retry with a delay** when the target program is absent and `missing_programs: true`. Use the retry pattern below. Programs requiring county-specific lookup tables (e.g. HCV, SNAP in large-HMFA counties) take longer — expect 12–20 seconds on staging before they appear.
+- **`missing_programs: true` means a program on the screen was dropped**, not that it is still computing. The eligibility endpoint calculates within the request; a program is dropped for a missing screener field, no calculator, or a missing program it gates on (`screener/views.py::eligibility_results`). The flag covers the whole screen, so another program's drop sets it too.
 
-- **The runner handles the retry:** it polls up to five times, four seconds apart, while the program is absent and `missing_programs` is true.
+- **The runner polls briefly, then reports a still-absent target as ERROR** when `missing_programs` is true. Locally, the screen's latest `EligibilitySnapshot.dropped_programs` names each dropped program and why.
 
 - **If `missing_programs: false` and program absent**: the program is genuinely not in the result set — not a timing issue. Treat as "Not eligible" per the normal evaluation rules.
 
-- If the response itself is empty/HTML (503), retry the curl call once. If it fails again, recreate the screen (new POST) and use the retry pattern above for the new UUID.
+- If the response itself is empty/HTML (503), retry the curl call once. If it fails again, recreate the screen (new POST) and fetch eligibility for the new UUID.
 - Document as `ERROR` only if eligibility completely fails after retry.
 
 ### Program Not Found in Results
 If the target program doesn't appear in the eligibility response at all:
-- If expected "Not eligible" → treat as PASS
+- If expected "Not eligible" → PASS only when `missing_programs` is false; otherwise ERROR (see above)
 - If expected "Eligible" → treat as FAIL, note "Program missing from results entirely"
 - Check: is the program active for this white label? Is the `name_abbreviated` correct?
 - **Before concluding program is missing**: verify by directly querying the UUID in a separate curl call and checking the raw programs list. Silent curl failures (timeout/503) can make a program appear absent when it was actually returned.

@@ -132,7 +132,9 @@ def build_member(m: dict) -> dict:
         "relationship": m["rel"], "birth_year": birth_year, "birth_month": birth_month, "age": age,
         "has_income": bool(streams), "income_streams": streams, "insurance": insurance,
     }
-    member.update({flag: m[flag] for flag in MEMBER_FLAGS if flag in m})
+    # The screener sends false for every unticked condition box. A flag left out would be null, and
+    # any program declaring it is dropped as a missing field. Pass null explicitly to test that.
+    member.update({flag: m.get(flag, False) for flag in MEMBER_FLAGS})
     return member
 
 
@@ -307,6 +309,16 @@ def run_one(api: Api, item: dict, defaults: dict, program: str, label: str, kind
                        detail=f"found={row is not None} already_has={row and row.get('already_has')}",
                        missing_programs=elig.get("missing_programs"))
 
+    if row is None and elig.get("missing_programs"):
+        # Some program on this screen was dropped (a missing screener field, no calculator, or an
+        # upstream it gates on), and it may be this one, so absence proves nothing.
+        expected = "Eligible" if item["expect"]["eligible"] else "Not eligible"
+        return Outcome(
+            label, title, kind, white_label, "ERROR", expected=expected, actual="Not found", uuid=uuid,
+            missing_programs=True,
+            detail="program absent and missing_programs is true: it may have been dropped, not judged",
+            diagnostics={"payload": payload, "error": elig.get("error")},
+        )
     expected, actual, act_value, value_match, ok = evaluate(row, item["expect"])
     outcome = Outcome(
         label, title, kind, white_label, "PASS" if ok else "FAIL", expected=expected, actual=actual,
@@ -324,6 +336,13 @@ def run_one(api: Api, item: dict, defaults: dict, program: str, label: str, kind
 
 
 # Reports
+
+
+def never_found(outcomes: list[Outcome]) -> bool:
+    """True when scenarios reached the API but none of them returned the program, so every
+    'not eligible' pass was only the program's absence."""
+    reached = [o for o in outcomes if o.kind == "scenario" and o.uuid and o.actual]
+    return bool(reached) and all(o.actual == "Not found" for o in reached)
 
 
 def money(value: Optional[int]) -> str:
@@ -373,6 +392,10 @@ def write_reports(data: dict, outcomes: list[Outcome], env: str, base: str, tick
         f"- **Checks passed:** {sum(o.result == 'PASS' for o in checks)}/{sum(o.result != 'BLOCKED' for o in checks)}",
         f"- **Pass rate:** {passed / judged:.0%} ({passed}/{judged}, blocked excluded)" if judged else "",
     ]
+    if never_found(outcomes):
+        lines += ["", "## Program never returned", "",
+                  f"`{data['program']}` was absent from every scenario's results, so no scenario judged it. "
+                  "Check it's imported and active here, and that the payloads supply every field it declares."]
     if blocked:
         lines += ["", "## Blocked", "", "| # | Description | Reason |", "|---|---|---|"]
         lines += [f"| {o.label} | {o.title} | {o.detail} |" for o in blocked]
@@ -434,6 +457,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     report = write_reports(data, outcomes, args.env, base, args.ticket, args.out_dir)
     print(f"\nReport: {report}")
+    if never_found(outcomes):
+        print(f"\n{data['program']} was not returned for any scenario: it isn't being judged. Check it's "
+              "imported and active, and that the payloads supply every field it declares.", file=sys.stderr)
+        return 1
     return 0 if all(o.result in ("PASS", "BLOCKED") for o in outcomes) else 1
 
 
