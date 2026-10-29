@@ -108,7 +108,7 @@ The calculator subclasses `ProgramCalculator`. Map spec criteria to overrides:
 **Tax programs** (claimed on a return for a tax year):
 - **Year:** read `self.tax_year` (`programs/framework/base.py`), which follows the record's `year`. Don't hardcode it. Key yearly figures by tax year, and fall back to the latest year with a Sentry message rather than raising (`CTC_YEARS` in `federal/ctc/calculator.py`).
 - **Tax Table:** where the source sends filers below a ceiling to a Tax Table, reproduce it. Price each row at its midpoint and round to the dollar (`tax_table_row` and `income_tax` in `federal/ctc/calculator.py`). The table is exact arithmetic, so the rate schedule applied to the exact figure is not an acceptable approximation.
-- **Yearly upkeep:** the program needs adding to the tax-year roll ticket and to the `_prior_tax_year` warning rows for its white label. Name both in the Phase 7 summary.
+- **Prior-tax-year warning:** if the white label has no `_prior_tax_year` warning row, name that in the Phase 7 summary. The January 1 tax-year rollover has its own process; don't flag it per program.
 
 ### Available APIs
 
@@ -500,7 +500,7 @@ Summarize:
 - test results;
 - the spec's data gaps and deviations;
 - for a federal replacement, which release each PR belongs to and the cleanup ticket;
-- follow-ups from the ticket comments (Phase 1) still open, and for a tax program the yearly upkeep in 2.3;
+- follow-ups from the ticket comments (Phase 1) still open, and for a tax program a missing prior-tax-year warning (2.3);
 - the ticket's "Done when" items outside the code (other tickets to rescope, the spec's `Calculator` and `Calculator added` fields to fill after merge).
 
 Suggest QA with `/api-qa-execution {ticket} local`. Federal programs run as `federal` test screens with no location. A scenario whose current benefit exists only as a state program runs on that state's white label.
