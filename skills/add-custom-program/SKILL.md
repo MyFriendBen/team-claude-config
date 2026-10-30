@@ -82,9 +82,11 @@ Also read `programs/framework/base.py`, `programs/framework/eligibility_messages
 
 ### 2.2 Create the calculator directory
 
+Set `{dir}` from the layout table: `programs/programs/white_labels/{state}/{program}` for a state-only or federal program, `programs/programs/cross_white_label/{family}` for a shared or new-family program. Phase 3 tests the same directory.
+
 ```bash
-mkdir -p programs/programs/white_labels/{state}/{program}/tests
-touch programs/programs/white_labels/{state}/{program}/__init__.py programs/programs/white_labels/{state}/{program}/tests/__init__.py
+mkdir -p {dir}/tests
+touch {dir}/__init__.py {dir}/tests/__init__.py
 ```
 
 ### 2.3 Write the calculator
@@ -216,9 +218,10 @@ assets = self.screen.household_assets if self.screen.household_assets is not Non
 e.condition(assets < self.asset_limit, messages.assets(self.asset_limit))
 ```
 
-**Categorical eligibility — household-level (SNAP/TANF bypass).** Read receipt through `programs/framework/pe_dependencies/receipt.py`: `screen_reports_snap(screen)`, and `screen_reports_tanf(screen)`, which counts the TANF tile **or** reported `cashAssistance` income (despite the module path, these are plain screen reads, not PolicyEngine calls). If the spec's Logic reads the tile only, ask, and amend the spec to match. The bare form:
-```python
-categorically_eligible = self.screen.has_base_benefit("snap") or self.screen.has_base_benefit("tanf")
+**Categorical eligibility — household-level (SNAP/TANF bypass).** Read receipt through `programs/framework/pe_dependencies/receipt.py`: `screen_reports_snap(screen)`, and `screen_reports_tanf(screen)`, which counts the TANF tile **or** reported `cashAssistance` income (despite the module path, these are plain screen reads, not PolicyEngine calls). If the spec's Logic reads the tile only, ask, and amend the spec to match. ```python
+from programs.framework.pe_dependencies.receipt import screen_reports_snap, screen_reports_tanf
+
+categorically_eligible = screen_reports_snap(self.screen) or screen_reports_tanf(self.screen)
 
 if categorically_eligible:
     e.condition(True, messages.presumed_eligibility())
@@ -394,7 +397,7 @@ Once green, mutate one boundary (flip a `<=`, disable a branch) and confirm a te
 
 Run the tests with the venv (add `-n0` to run one file without xdist; `-p no:xdist` errors because `pytest.ini` passes `-n`):
 ```bash
-venv/bin/pytest programs/programs/white_labels/{state}/{program}
+venv/bin/pytest {dir}
 ```
 
 Every test passes before you go on.
