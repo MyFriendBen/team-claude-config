@@ -116,7 +116,7 @@ If Linear MCP is not available, STOP and notify the user.
 
    **Expected value, as an annual figure** (the API returns `estimated_value` in annual whole dollars):
    - `$X/month` → `X × 12`; `$X/year` → `X`. Strip `$` and commas.
-   - The calculator rounds each payment unit's annual value to whole dollars, so allow **1 dollar either way per counted unit** (`× 2 eligible members` → 2 dollars). Report both figures. (64.89 × 12 = 778.68 shows as 779 per member, so the spec's 129.78/month is 1,557.36 a year and the API returns 1,558.)
+   - A calculator may round each payment unit's annual value, and the API then truncates the total to whole dollars, so allow **1 dollar either way per counted unit** (`× 2 eligible members` → 2 dollars). Report both figures. (64.89 × 12 = 778.68 shows as 779 per member, so the spec's 129.78/month is 1,557.36 a year and the API returns 1,558.)
    - `Ineligible`, `Not eligible` or no dollar figure → no value comparison.
 
 6. **Classify each scenario as API-testable or frontend-only.**
@@ -225,7 +225,11 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
         "medicaid": false,
         "medicare": false,
         "chp": false,
-        "va": false
+        "va": false,
+        "mass_health": false,
+        "emergency_medicaid": false,
+        "family_planning": false,
+        "dont_know": false
       }
     }
   ],
@@ -393,7 +397,7 @@ Send every flag on every member, `false` where the scenario doesn't set it: the 
 birth_month = 1  (default, unless spec provides explicit month)
 birth_year = current_year - age, minus 1 more if birth_month is later than the current month
 ```
-Send `age` as today's age. A birth month later than the current month otherwise lands a year off, and an infant's birth date in the future (400).
+This is for an ordinary age. An age on a given date ("64 on December 31, 2025") sets the birth year from that year instead (Phase 1 step 5). Send `age` as today's age either way. A birth month later than the current month otherwise lands a year off, and an infant's birth date in the future (400).
 If the spec says "Birth month/year: June 2022", use `birth_month: 6, birth_year: 2022` directly and calculate age from that.
 
 **County naming rules:**
@@ -407,10 +411,10 @@ If the spec says "Birth month/year: June 2022", use `birth_month: 6, birth_year:
 
 ### Phase 3: Run the scenarios
 
-Write one Python script for the run, in `~/main/qa/{TICKET-ID}-{program_key}-qa.py`. Call the API with `curl` through `subprocess` (urllib fails Heroku's certificates). Follow these rules:
+Write one Python script for the run, in `{output-dir}/{TICKET-ID}-{program_key}-qa.py` (`~/main/qa` unless the output-directory argument names another). Call the API with `curl` through `subprocess` (urllib fails Heroku's certificates). Follow these rules:
 
 **Payloads**
-- One screen per scenario, sequentially: `POST /api/screens/`, then `GET /api/eligibility/{uuid}`.
+- One screen per scenario, sequentially: `POST /api/screens/` with `Content-Type: application/json` (curl's `-d` otherwise sends form encoding), then `GET /api/eligibility/{uuid}`.
 - Build each payload by the Phase 2 rules: every condition flag `false` unless set, `age` as today's age, `expenses: []` when there are none, a full insurance map, no location on `federal`.
 - Keep each scenario's expected outcome and annual value beside its payload, so the script carries its own expectations when it's handed over.
 
@@ -433,7 +437,7 @@ Write one Python script for the run, in `~/main/qa/{TICKET-ID}-{program_key}-qa.
 
 ## Results Documentation
 
-Write `~/main/qa/{TICKET-ID}-{program}-{env}-results.md` (add a suffix when a second run would overwrite one). It holds:
+Write `{output-dir}/{TICKET-ID}-{program}-{env}-results.md` (add a suffix when a second run would overwrite one). It holds:
 
 - **Header:** program name and key, ticket, date, environment, API base, and the spec's path and branch.
 - **Scenarios table:** `| # | Description | White label | Expected | Actual | Exp. Value | Act. Value | Value Match | Result | Screen UUID |`. Values are annual whole dollars. Frontend-only scenarios appear as `SKIPPED`, keeping the spec's numbering.
@@ -452,9 +456,8 @@ Write `~/main/qa/{TICKET-ID}-{program}-{env}-results.md` (add a suffix when a se
 If no API key can be resolved:
 ```
 ERROR: No API key found for [environment] environment.
-Please provide an API key:
-- Set the [ENV_VAR] environment variable for this run, OR
-- Paste it here (it won't be echoed or saved)
+Set the [ENV_VAR] environment variable in your own shell and rerun.
+Don't paste the key into the conversation.
 ```
 
 ### Screen Creation Fails (400)
@@ -500,7 +503,7 @@ If the target program doesn't appear in the eligibility response at all:
 8. **FPL version mismatch** — SNAP and other income-tested programs update their FPL thresholds every October. Specs are sometimes written with projected future FPL values. If a boundary-income scenario (e.g., "1 below 200% FPL") fails unexpectedly, check which FPL year the spec used versus the year PolicyEngine currently uses. If the spec income value exceeds PE's current threshold, this is a spec issue — not a calculator bug. Note it in the results and recommend updating the spec income to a value safely below the current threshold.
 9. **SNAP student restriction age boundary** — 7 CFR 273.5 applies only to individuals aged 18–49. A spec scenario expecting a person under 18 to be ineligible due to student status is incorrect; the restriction doesn't apply below 18. PolicyEngine correctly returns Eligible for under-18 students. Flag this as a spec issue if encountered.
 10. **`already_has: true` still has a non-zero `estimated_value`** — this is the benefit amount the household would receive if they didn't already have it. It does not affect result evaluation (still "Not eligible"), but confirms the program calculated correctly. Value comparison is skipped for `already_has` scenarios.
-11. **Value comparison uses the API's whole-dollar integer** — `estimated_value` is annual and rounded. Convert the spec's figure to annual (Phase 1 step 5), strip the dollar sign and commas, and compare within the rounding tolerance. Spec `2,484/year` → API `2484`.
+11. **Value comparison uses the API's whole-dollar integer** — `estimated_value` is annual whole dollars: the API truncates the fraction (`math.trunc` in `screener/views.py`), after any per-unit rounding the calculator does. Convert the spec's figure to annual (Phase 1 step 5), strip the dollar sign and commas, and compare within the rounding tolerance. Spec `2,484/year` → API `2484`.
 12. **`expenses` is a required field** — The Screen serializer requires `"expenses"` in every POST payload. Omitting it returns `400 Bad Request` with `{"expenses": ["This field is required."]}`. Always include `"expenses": []` even when the scenario has no expenses. See the Expenses mapping table in Phase 2 for available expense types.
 
 ---

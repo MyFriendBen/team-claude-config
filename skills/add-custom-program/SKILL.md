@@ -54,10 +54,10 @@ A family's base is `cross_white_label/{family}/base.py`. When a new MFB base rep
    - **State-only** or **shared across white labels**: Phases 2–5 and 7.
    - **New family base plus its first state:** a base spec (`{family}/base/`, no record) and a state spec plus record. The base is `abstract=True` and backs no row; the state subclass is the program. Phases 2–5 and 7, testing the base through a stand-in subclass (Phase 3).
    - **Federal, new:** the record's white label is `federal` and no state rows carry the same `base_program`. Phases 2–5 and 7, plus the federal notes in 2.3.
-   - **Federal, replacing state rows:** the record's white label is `federal`, and state programs with the same `base_program` already exist, e.g. `co_wic`, `il_wic`, `tx_wic`. **Phase 6 applies**, and the work ships as two benefits-api PRs over two weekly releases. To check, grep for the base program and query a database you can read (local or staging, never prod):
+   - **Federal, replacing state rows:** the record's white label is `federal`, and state programs with the same `base_program` already exist, e.g. `co_wic`, `il_wic`, `tx_wic`. **Phase 6 applies**, and the work ships as two benefits-api PRs over two weekly releases. To check, take `{base_program}` from the record's `program.base_program` (`wic` for `federal_wic`, not the key), then grep for it and query a database you can read (local or staging, never prod):
      ```bash
-     git grep -nE "program_code = \"[a-z_]*{program}\"" -- programs/programs
-     venv/bin/python manage.py shell -c "from programs.models import Program; print(list(Program.objects.filter(base_program='{program}').values_list('white_label__code', 'name_abbreviated', 'active')))"
+     git grep -nE "program_code = \"[a-z_]*{base_program}\"" -- programs/programs
+     venv/bin/python manage.py shell -c "from programs.models import Program; print(list(Program.objects.filter(base_program='{base_program}').values_list('white_label__code', 'name_abbreviated', 'active')))"
      ```
 7. In `benefits-api/`, create or switch to the feature branch from up-to-date `main`.
 
@@ -165,7 +165,7 @@ self.program.year.as_dict()                  # dict[int, int] — {household_siz
 self.program.year.period                     # str — time period for external service lookups (AMI/SMI)
 ```
 
-**`self.data` (cross-program eligibility):** results of programs already calculated. Prefer `self.program_eligible("code")` and declare the program in `gates_on` / `gates_on_any` (`programs/framework/gates.py`).
+**`self.data` (cross-program eligibility):** results of programs already calculated. Use `self.program_eligible("code")` with the program declared in `gates_on` for a strict gate, and `self.any_program_eligible([...])` with `gates_on_any` for a list the household can qualify through (`programs/framework/base.py`, `gates.py`). Each asserts its own declaration, so mixing them raises.
 
 ### Key implementation patterns
 
@@ -236,7 +236,7 @@ for member_e in e.eligible_members:
         continue
     member = member_e.member
     has_ssi = member.calc_gross_income("yearly", ["sSI"]) > 0
-    has_medicaid = member.insurance.has_insurance_types(["medicaid"])
+    has_medicaid = member.has_insurance_types(["medicaid", "ma_mass_health"])
     if has_ssi or has_medicaid:
         presumed_eligible = True
         break
@@ -324,7 +324,7 @@ def member_value(self, member: HouseholdMember) -> int:
 
 ### Never let a computed value land on zero
 
-A value of zero fails two filters: the API reports the program **not eligible**, and the frontend drops it on `programValue(program) > 0` (`benefits-calculator/src/Components/Results/Filter/filterPrograms.ts`). If the spec's value formula can reach zero or go negative for an eligible household, floor it at `1`, and amend the spec scenario to match in program-ops. Floor at `0` only when zero genuinely means "not eligible".
+A custom calculator with a zero value still reports `eligible: true` (only PolicyEngine programs set `eligible = value > 0`), but the frontend drops it on `programValue(program) > 0` (`benefits-calculator/src/Components/Results/Filter/filterPrograms.ts`), so the household never sees it. If the spec's value formula can reach zero or go negative for an eligible household, floor it at `1`, and amend the spec scenario to match in program-ops. Floor at `0` only when zero genuinely means "not eligible".
 
 ### Benefit value units — ALWAYS annual
 
@@ -475,7 +475,7 @@ Per environment, in this order (production commands are handed to David):
 1. **Merge PR 1.** Staging deploys it. It reaches prod in the next weekly release (N).
 2. **Import the federal row, switched off,** once PR 1 is live in that environment: `python3 scripts/import_programs.py --env staging --program {key}`, and later `--env prod`. Leave it off.
 3. **Merge PR 2 only once PR 1 is in a published prod release and the federal row is imported in both staging and prod.** Merging earlier puts both PRs in one weekly release. Prod then can't import before its `migrate` runs, so `migrate` stops at the switch-over. That's safe, since it changes nothing and the state rows keep serving, but it leaves the release half-applied until someone imports, re-runs `migrate`, and runs `add_config --all`. If both are already on `main`, recommend cutting the release at PR 1's merge commit.
-4. **Verify after each deploy:** state rows off, federal row on, no `CurrentBenefit` left on a state row, and a state screen shows the program once.
+4. **Verify after each deploy.** After PR 1 and the import: state rows on, federal row imported and off. After PR 2: state rows off, federal row on, no `CurrentBenefit` left on a state row, and a state screen shows the program once.
 
 ### 6.4 Cleanup ticket (after PR 2 is live in prod)
 
