@@ -22,7 +22,8 @@ The mechanics live in benefits-api: `manage.py record_and_diff` (`programs/manag
 - Only call the private `household.api.policyengine.org`. Never the public API.
 - Never print, copy, link or edit any `.env` file. Recording reads PE credentials from `benefits-api/.env` through `decouple`, which finds it by walking up from the worktree.
 - Never edit a `spec.md` expected value, and never merge. The PR and tickets go to people.
-- If a stage fails, stop. Say which stage failed and why, and keep the run directory so triage can be finished by hand. Don't retry a recording blindly: PE limits tokens per month.
+- If a stage fails, stop. Say which stage failed and why, and keep the run directory so triage can be finished by hand.
+- Don't flush Redis during a run. PE limits how many bearer tokens are minted per month. Each token is cached in Redis for ~30 days, one per pytest worker, and flushing forces new ones.
 
 ---
 
@@ -117,7 +118,7 @@ If Step 7 files a rollup and this step opened a PR, add the rollup link with `gh
 
 For every module in either `diff.json` whose `status` isn't `unchanged`, and each scenario under it:
 
-1. Read the scenario's test (its docstring states the expected outcome) and the program's spec: `spec.md` beside the tests' parent, or `specs/<state>.md` in a family directory.
+1. Read the scenario's test (its docstring states the expected outcome) and the program's spec: `spec.md` beside the tests' parent, or `specs/<state>.md` in a family directory. If there's no spec, work from the test docstrings, and mark the finding "no spec: a person decides" instead of classifying it as a fix or divergence.
 2. Read the spec's cited source for the rule that moved.
 3. Find the PE change: the `CHANGELOG.md` sections of `PolicyEngine/policyengine-us` between the baseline version and the target:
    `gh api repos/PolicyEngine/policyengine-us/contents/CHANGELOG.md -H 'Accept: application/vnd.github.raw'`
@@ -146,7 +147,7 @@ Skip writes under `--dry-run`; print the drafts.
 - Body:
   - Header: run date, who ran it, `PIN` / `CURRENT` / `FRONTIER`, and the PR if Step 5 opened one.
   - **Live now (`CURRENT`)** and **Coming (`FRONTIER`)** sections. One subsection per program: a table of scenario / before / after, the class and its one-line reason, the spec citation, the PE changelog entry.
-  - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording.
+  - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording. Say that a held pin is a version PE no longer serves, so a PR that changes a held module's PE request body can't re-record it until the drift is reconciled.
 
 **Urgent** (one per screener-breaking finding; never folded into the rollup):
 - Team **MFB General**, labels `PE Drift` and `Bug`, priority Urgent, title `PE drift: <program> breaks at PolicyEngine <version>`.
@@ -161,4 +162,4 @@ Remove the worktree once its branch is pushed, under `--dry-run`, or if Step 5 f
 
 ## First run
 
-Modules recorded before the suite pin existed still carry `PE_VERSION` overrides at old versions. The first run re-records them all at `CURRENT`, so expect a large rollup. That rollup is the catch-up backlog.
+Modules recorded before the suite pin existed still carry `PE_VERSION` overrides at old versions, and the suite pin itself trails `CURRENT`. The first run re-records every PE cassette at `CURRENT`, so expect many modules to be held and a large rollup. That rollup is the catch-up backlog.
