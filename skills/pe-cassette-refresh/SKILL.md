@@ -23,7 +23,7 @@ The mechanics live in benefits-api: `manage.py record_and_diff` (`programs/manag
 - Never print, copy, link or edit any `.env` file. Recording reads PE credentials from `benefits-api/.env` through `decouple`, which finds it by walking up from the worktree.
 - Never edit a `spec.md` expected value, and never merge. The PR and tickets go to people.
 - If a stage fails, stop. Say which stage failed and why, and keep the run directory so triage can be finished by hand.
-- Don't flush Redis during a run. PE limits how many bearer tokens are minted per month. Each token is cached in Redis for ~30 days, one per pytest worker, and flushing forces new ones.
+- Don't flush Redis during a run. PE limits how many bearer tokens are minted per month. Recording runs in one process and caches one token for ~30 days in the Redis database `REDIS_URL` names; flushing it forces a new one.
 
 ---
 
