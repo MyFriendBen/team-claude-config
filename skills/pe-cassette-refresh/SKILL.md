@@ -148,8 +148,8 @@ Skip writes under `--dry-run`; print the drafts.
 - Team **MFB General**, label `PE Drift`, priority High, title `PE drift rollup — week of <Monday of DATE>`.
 - Body:
   - Header: run date, who ran it, `PIN` / `CURRENT` / `FRONTIER`, and the PR if Step 5 opened one.
-  - **Live now (`CURRENT`)** and **Coming (`FRONTIER`)** sections. One subsection per program: a table of scenario / before / after, the class and its one-line reason, the spec citation, the PE changelog entry.
-  - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording. Say that a held pin is a version PE no longer serves, so a PR that changes a held module's PE request body can't re-record it until the drift is reconciled.
+  - **Live now (`CURRENT`)** and **Coming (`FRONTIER`)** sections. One subsection per program: a table of scenario / before / after, the class and its one-line reason, the spec citation, the PE changelog entry. For a no-spec finding, the class is "No spec: a person decides", the reason says what the test docstring expects, and the citation names the test (`<file>::<test>`) in place of a spec.
+  - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording. Adoption runs at `CURRENT`, so a held pin is older than `CURRENT` and PE no longer serves it. Say so: a PR that changes a held module's PE request body can't re-record it until the drift is reconciled. (A held pin PE still serves, e.g. from a manual `--adopt` at `frontier`, can be re-recorded at its pin.)
 
 **Urgent** (one per screener-breaking finding; never folded into the rollup):
 - Team **MFB General**, labels `PE Drift` and `Bug`, priority Urgent, title `PE drift: <program> breaks at PolicyEngine <version>`.
