@@ -12,7 +12,7 @@ example: /pe-cassette-refresh
 PolicyEngine (PE) serves only what `current` and `frontier` resolve to, and staging and prod ride `current` with no pin. So a PE release changes what households see the day PE promotes it. This skill measures that change against our spec scenarios and turns it into a PR and tickets.
 
 - **Who and when:** the on-call dev, twice a week. PE updates `current` weekly, around Wednesday, and Monday's `frontier` is what it becomes. Run Monday or Tuesday to see what's coming, and again after the update to adopt it. Steps for the on-call dev: Outline, "On-Call Rotation".
-- **Triage:** screener-breaking findings are hotfixes (Urgent tickets). Value changes ship in the normal weekly release; their spec and assertion updates ride the adoption PR, since they can't pass before PE updates.
+- **Triage:** screener-breaking findings are hotfixes (Urgent tickets). Value changes ship in the normal weekly release. The skill never makes their spec and assertion updates (see Rules): the on-call dev does, after triaging the rollup, adding them to the adoption PR or a follow-up PR. They can't pass before PE updates, and until they land the module stays held.
 - **`--dry-run`:** do everything except push, open the PR, and write to Linear. Print the PR body and ticket drafts instead.
 
 The mechanics live in benefits-api: `manage.py record_and_diff` (`programs/management/commands/record_and_diff.py`) and the suite pin `PE_TEST_VERSION` (`programs/programs/testing_fixtures/pe_integration.py`). See `docs/TESTING.md` there. This skill runs them and does the judgment.
