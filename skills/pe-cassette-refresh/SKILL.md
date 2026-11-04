@@ -1,6 +1,6 @@
 ---
 name: pe-cassette-refresh
-description: Weekly PolicyEngine drift check for benefits-api. Re-records every PolicyEngine spec-scenario cassette at PE `frontier` (early warning) and `current` (adoption), opens a PR adopting the programs whose values didn't change, and files one Linear rollup ticket for value changes plus a separate Urgent ticket per screener-breaking change. Run by the on-call dev on Thursdays, or whenever PolicyEngine promotes a release.
+description: Weekly PolicyEngine drift check for benefits-api. Re-records every PolicyEngine spec-scenario cassette at PE `frontier` (early warning) and `current` (adoption), opens a PR adopting the programs whose values didn't change, and files one Linear rollup ticket for value changes plus a separate Urgent ticket per screener-breaking change. Run by the on-call dev Monday or Tuesday (to see what the coming PE update brings) and again Wednesday after PE updates `current` (to adopt it).
 usage: /pe-cassette-refresh [--dry-run]
 example: /pe-cassette-refresh
 ---
@@ -11,8 +11,8 @@ example: /pe-cassette-refresh
 
 PolicyEngine (PE) serves only what `current` and `frontier` resolve to, and staging and prod ride `current` with no pin. So a PE release changes what households see the day PE promotes it. This skill measures that change against our spec scenarios and turns it into a PR and tickets.
 
-- **Who:** the on-call dev, every Thursday. PE releases usually land Tuesday–Wednesday.
-- **Triage SLA:** the rollup is triaged by the following Monday and fixed in that week's release. Urgent tickets are hotfixes.
+- **Who and when:** the on-call dev, twice a week. PE updates `current` weekly, around Wednesday, and Monday's `frontier` is what it becomes. Run Monday or Tuesday to see what's coming, and again after the update to adopt it. Steps for the on-call dev: Outline, "On-Call Rotation".
+- **Triage:** screener-breaking findings are hotfixes (Urgent tickets). Value changes ship in the normal weekly release. The skill never makes their spec and assertion updates (see Rules): the on-call dev does, after triaging the rollup, adding them to the adoption PR or a follow-up PR. They can't pass before PE updates, and until they land the module stays held.
 - **`--dry-run`:** do everything except push, open the PR, and write to Linear. Print the PR body and ticket drafts instead.
 
 The mechanics live in benefits-api: `manage.py record_and_diff` (`programs/management/commands/record_and_diff.py`) and the suite pin `PE_TEST_VERSION` (`programs/programs/testing_fixtures/pe_integration.py`). See `docs/TESTING.md` there. This skill runs them and does the judgment.
@@ -63,7 +63,7 @@ cd "$API"
 WT="$API/.claude/worktrees/pe-drift-$DATE"
 git worktree add -b "pe-drift/$DATE" "$WT" origin/main
 ln -s "$API/venv" "$WT/venv"                     # the pre-commit hook runs venv/bin/python; gitignored
-RUN=/tmp/pe-drift/$DATE
+RUN=/tmp/pe-drift/$DATE                          # under --dry-run: /tmp/pe-drift/$DATE-dryrun, so a later real run keeps the drafts
 PY="$WT/venv/bin/python"
 ```
 
@@ -140,14 +140,16 @@ Skip writes under `--dry-run`; print the drafts.
 
 **Label.** Use `PE Drift`. If it doesn't exist, create it (workspace label, description: "Found by the weekly PolicyEngine cassette refresh").
 
-**Previous rollup.** Find the latest open issue labelled `PE Drift` titled `PE drift rollup — …`. Findings in it that this run still shows are carried forward, marked "Carried forward from <issue>", not filed again. Comment on the previous rollup linking the new one.
+**This week's rollup.** If an open issue labelled `PE Drift` titled `PE drift rollup — week of <Monday of DATE>` exists (an earlier run this week filed it), update it instead of filing another: rewrite its body from this run, keep findings still shown, and mark those that no longer show as resolved. Add a comment summarising what changed since the last run, and link the PR if this run opened one.
 
-**Rollup** (one per run; skip only if there are no findings and nothing carried forward):
+**Previous rollup.** Otherwise, find the latest open issue labelled `PE Drift` titled `PE drift rollup — …`. Findings in it that this run still shows are carried forward, marked "Carried forward from <issue>", not filed again. Comment on the previous rollup linking the new one.
+
+**Rollup** (one per week; skip only if there are no findings and nothing carried forward):
 - Team **MFB General**, label `PE Drift`, priority High, title `PE drift rollup — week of <Monday of DATE>`.
 - Body:
   - Header: run date, who ran it, `PIN` / `CURRENT` / `FRONTIER`, and the PR if Step 5 opened one.
-  - **Live now (`CURRENT`)** and **Coming (`FRONTIER`)** sections. One subsection per program: a table of scenario / before / after, the class and its one-line reason, the spec citation, the PE changelog entry.
-  - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording. Say that a held pin is a version PE no longer serves, so a PR that changes a held module's PE request body can't re-record it until the drift is reconciled.
+  - **Live now (`CURRENT`)** and **Coming (`FRONTIER`)** sections. One subsection per program: a table of scenario / before / after, the class and its one-line reason, the spec citation, the PE changelog entry. For a no-spec finding, the class is "No spec: a person decides", the reason says what the test docstring expects, and the citation names the test (`<file>::<test>`) in place of a spec.
+  - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording. Adoption runs at `CURRENT`, so a held pin is older than `CURRENT` and PE no longer serves it. Say so: a PR that changes a held module's PE request body can't re-record it until the drift is reconciled. (A held pin PE still serves, e.g. from a manual `--adopt` at `frontier`, can be re-recorded at its pin.)
 
 **Urgent** (one per screener-breaking finding; never folded into the rollup):
 - Team **MFB General**, labels `PE Drift` and `Bug`, priority Urgent, title `PE drift: <program> breaks at PolicyEngine <version>`.
@@ -158,7 +160,7 @@ Skip writes under `--dry-run`; print the drafts.
 
 Report to the dev: the versions, counts per class, links to the PR, rollup and any Urgent tickets, and anything triage couldn't decide.
 
-Remove the worktree once its branch is pushed, under `--dry-run`, or if Step 5 found no changes: `rm "$WT/venv" && git worktree remove "$WT"`. With no changes, also delete the unused branch: `git branch -D "pe-drift/$DATE"`. Keep `$RUN` until the rollup is triaged.
+Remove the worktree once its branch is pushed, under `--dry-run`, or if Step 5 found no changes: `rm "$WT/venv" && git worktree remove "$WT"`. Under `--dry-run` or with no changes, also delete the branch, or a later run that day fails at `git worktree add -b`: `git branch -D "pe-drift/$DATE"`. Keep `$RUN` until the rollup is triaged.
 
 ## First run
 
