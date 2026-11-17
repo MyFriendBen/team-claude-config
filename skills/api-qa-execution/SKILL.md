@@ -207,7 +207,7 @@ For each **API-testable** scenario (skip frontend-only scenarios), construct a S
   "county": "{Steps → Location county; omit on federal}",
   "household_size": "{number of Person lines, unless Steps says otherwise}",
   "household_assets": 0,
-  "request_language_code": "en",
+  "request_language_code": "en-us",
   "start_date": "{current ISO 8601 timestamp}",
   "referral_source": "test",
   "household_members": [
@@ -257,6 +257,8 @@ A federal program's scenarios run as test screens on the `federal` white label, 
 
 #### Field Mapping from Spec Scenarios
 
+Send only values from these tables. They mirror the lists benefits-api serves (`configuration/white_labels/`, plus `headOfHousehold`); a value outside them saves today but stops counting where calculators look for it. When a scenario names something with no API value, mark it **BLOCKED** rather than inventing one.
+
 **Relationship mapping** (spec text → API value). The API doesn't validate `relationship`: a value not in this table saves without error, but the member then never counts as a dependent (`DEPENDENT_ELIGIBLE_RELATIONSHIPS` in `screener/models.py`), which can change a result without any warning. The source of truth is `relationship_options` in benefits-api `configuration/white_labels/base.py`, plus `headOfHousehold` for person 1.
 | Spec Text | API Value |
 |---|---|
@@ -296,7 +298,8 @@ A federal program's scenarios run as test screens on the `federal` white label, 
 | Rental Income | `rental` |
 | Veterans Benefits | `veteran` |
 | Workers Compensation | `workersComp` |
-| Other | `other` |
+| Gifts / Contributions | `gifts` |
+| Other | none: use the specific type the scenario describes, else **BLOCKED** |
 
 **Income frequency mapping** (spec text → API enum):
 | Spec Text | API Value |
@@ -305,6 +308,7 @@ A federal program's scenarios run as test screens on the `federal` white label, 
 | per year / yearly / annually | `yearly` |
 | per week / weekly / every week | `weekly` |
 | biweekly / every two weeks | `biweekly` |
+| twice a month / semimonthly | `semimonthly` |
 | hourly | `hourly`, plus `hours_worked` (per week) on the stream; without it the API treats the income as malformed and drops programs |
 
 **Insurance mapping** (spec text → insurance object field):
@@ -369,7 +373,7 @@ The `expenses` field is a **required** top-level array in the Screen payload. It
 | Child Support (Paid) | `childSupport` | dependentCare |
 | Dependent Care | `dependentCare` | dependentCare |
 
-Expense `frequency` uses the same values as income: `monthly`, `weekly`, `biweekly`, `semimonthly`, `yearly`.
+Expense `frequency` is `monthly` or `yearly`, the only two the screener sends. Convert any other period to monthly.
 
 **Example expense object:**
 ```json
