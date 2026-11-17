@@ -257,7 +257,7 @@ A federal program's scenarios run as test screens on the `federal` white label, 
 
 #### Field Mapping from Spec Scenarios
 
-Send only values from these tables. They mirror the lists benefits-api serves (`configuration/white_labels/`, plus `headOfHousehold`); a value outside them saves today but stops counting where calculators look for it. When a scenario names something with no API value, mark it **BLOCKED** rather than inventing one.
+For relationships, income, frequencies, insurance and expenses, send only values from these tables. They mirror the lists benefits-api serves (`configuration/white_labels/`, plus `headOfHousehold`); a value outside them stops counting where calculators look for it. When a scenario names something with no API value, mark it **BLOCKED** rather than inventing one. `current_benefits` is the exception: send the exact `name_abbreviated` from the white label's `Program` record (see the Current benefits mapping).
 
 **Relationship mapping** (spec text → API value). The API doesn't validate `relationship`: a value not in this table saves without error, but the member then never counts as a dependent (`DEPENDENT_ELIGIBLE_RELATIONSHIPS` in `screener/models.py`), which can change a result without any warning. The source of truth is `relationship_options` in benefits-api `configuration/white_labels/base.py`, plus `headOfHousehold` for person 1.
 | Spec Text | API Value |
