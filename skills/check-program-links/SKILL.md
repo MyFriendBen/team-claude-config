@@ -19,7 +19,7 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
 
 1. **Check project location**
    ```bash
-   cd /Users/jm/code/mfb
+   cd <mfb-workspace>
    ```
 
 2. **Present SQL query for user execution**

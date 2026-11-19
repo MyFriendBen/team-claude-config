@@ -222,6 +222,9 @@ def run_scenario(t: Ticket, s: S, offered: list[str]) -> tuple[str, str]:
         sys.exit(f"POST /api/screens/ returned {status}: check API_KEY")
     if status != 201:
         return "ERROR", f"POST /api/screens/ returned {status}: {str(screen)[:300]}"
+    if not isinstance(screen, dict) or not screen.get("uuid"):
+        # Don't re-POST: the first request may have created the screen.
+        return "ERROR", f"POST /api/screens/ returned 201 with an unusable body: {str(screen)[:300]}"
     saved = {b if isinstance(b, str) else b.get("name_abbreviated") for b in screen.get("current_benefits") or []}
     unsaved = [b for b in benefits if b not in saved]
     if unsaved and screen.get("current_benefits") is not None:
@@ -249,8 +252,11 @@ def run_scenario(t: Ticket, s: S, offered: list[str]) -> tuple[str, str]:
     problems = []
     if eligible != s.eligible:
         problems.append(f"expected eligible={s.eligible}")
-    if s.eligible and s.value is not None and value is not None and abs(value - s.value) > s.units:
-        problems.append(f"expected value={s.value} (±{s.units})")
+    if s.eligible and s.value is not None and program is not None:
+        if not isinstance(value, (int, float)):
+            problems.append(f"expected value={s.value}, got no numeric value")
+        elif abs(value - s.value) > s.units:
+            problems.append(f"expected value={s.value} (±{s.units})")
     for person, (m_eligible, m_value) in s.member_expect.items():
         m = by_id.get(ids[person - 1])
         if m is None:

@@ -1,6 +1,6 @@
 ---
 name: accelerate-qa
-description: Work through every Linear ticket assigned to you in "Prod QA" or "Staging QA" (required argument, prod or staging). Sorts the tickets by how much can be scripted, runs the scripts or hands them over, moves passing tickets on with a results comment, and walks you through the manual checks. Use when the user asks to clear, speed up, or batch their Prod QA or Staging QA tickets.
+description: Work through every Linear ticket assigned to you in "Prod QA" or "Staging QA" (required argument, prod or staging). Imports program tickets' programs first (staging), sorts the tickets by how much can be scripted, runs the scripts or hands them over, moves passing tickets on with a results comment, and walks you through the manual checks. Use when the user asks to clear, speed up, or batch their Prod QA or Staging QA tickets.
 argument-hint: prod | staging
 ---
 
@@ -40,12 +40,12 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 
 - Claude **writes and tests** every script against staging. **The user runs it in prod** and pastes the output, and Claude grades it.
 - Hand over a **table: ticket → exact command → staging result**, so the user runs a whole bucket in one go.
-- Staging is fine to query directly. Use it to tell a code bug from a prod-config problem: the same code passing on staging means prod config.
+- Staging is fine to query directly, and comparing with it helps narrow a prod failure. Staging follows `main` and prod follows the last release, so first compare what each has deployed. A staging pass on the same code points at prod config or data, but it isn't proof: data differences and flaky upstream APIs can produce the same split.
 - Say up front that this is the flow. Don't ask how to handle prod each time.
 
 **staging:** Claude runs everything itself: the state check via `heroku run` on `cobenefits-api-staging`, and the scenarios over HTTP.
 - **API key:** read it in-process from wherever the user keeps it (an environment variable or the workspace `.env`), in the same command that runs the script. Never echo, log or write it, and never edit a `.env` file. If you can't find it, ask.
-- **Read-only:** scripts stay read-only even though staging allows writes. Any data change, such as activating a program or importing a program, is the user's call.
+- **Read-only:** scripts stay read-only even though staging allows writes. The program import in step 2 is the one exception. Any other data change, such as activating a program, is the user's call.
 
 ## Steps
 
@@ -59,7 +59,29 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 - An unmerged or undeployed PR means the ticket isn't ready. Say so instead of testing it.
 - Tickets with no program or screener change (tooling, skills, docs) have nothing to deploy. Check them against their acceptance criteria, and expect them to land in bucket 3.
 
-### 2. State check first (one read-only script for all tickets)
+### 2. Import program tickets' programs (before any test)
+A ticket is a program ticket when it adds or changes one program, named by its program key: a white label code, an underscore, and an abbreviated program name (`nj_head_start`, `co_snap`, `federal_ssdi`). Find the key in the ticket's title, description or linked PRs. Confirm that its record is on program-ops `main`, because staging and prod import only merged records:
+
+```
+git -C <workspace>/program-ops fetch -q origin
+git -C <workspace>/program-ops ls-tree -r --name-only origin/main | grep '/<key>_program_record.json$'
+```
+
+If there's no record on `main` (not merged yet, or the program has only a v2 spec), tell the user and skip the import for that ticket. If you can't tell which key a ticket is about, ask.
+
+**staging:** import each program before running anything else. Run these from `<workspace>/program-ops`:
+1. Dry run: `python3 scripts/import_programs.py --env staging --dry-run-only --program <key>`.
+2. Read the summary counts:
+   - **`Failed`, `Waiting`, `Conflicts`, `Admin edits kept` or `Not applied yet` above 0:** stop and show the user that part of the output. `Waiting` means the calculator hasn't deployed. The others need a person to decide which value wins.
+   - **Only `Current`:** nothing to import; go on.
+   - **`To create` or `To update` above 0, and nothing else:** apply it with `echo y | python3 scripts/import_programs.py --env staging --program <key>`. The `y` answers the single "Apply the changes above to staging?" prompt.
+3. Note the result (created, updated or current) for the ticket comment.
+
+An import never switches a program on or off. A newly created program is inactive, so step 3's inactive-program rule applies.
+
+**prod:** never run the import. Before step 3, list each program key and ask the user to run `python3 scripts/import_programs.py --env prod --program <key>` from program-ops. Wait for them to confirm before going on.
+
+### 3. State check first (one read-only script for all tickets)
 Copy `templates/preflight.py` and add one block per ticket covering every row it touches:
 - migrations applied;
 - programs exist, are active, have a registered calculator and the right year;
@@ -77,16 +99,16 @@ Keep `--no-tty`; without it the shell reads the file line by line and the summar
 
 - **Dry-run it locally first** to catch errors, but **don't trust local data**. The local database is often stale, and it holds rows from other branches. Treat a local-only FAIL as unconfirmed until the target environment agrees.
 - **Inactive program:** an inactive program is never calculated, so scenarios against it are meaningless. Ask the user whether to switch it on, skip the ticket, or move it back.
-- **staging, missing or out-of-date program:** this usually means the program hasn't been imported on staging yet. Program records import through program-ops `scripts/import_programs.py`, v2 specs through benefits-api's `apply_program`, and a program can only be imported once its calculator has deployed. Report it; don't import it unasked.
+- **Missing or out-of-date program after step 2:** check the import output first. A program can only be imported once its calculator has deployed. Report anything left over; don't import beyond step 2 unasked.
 
-### 3. Sort into buckets
+### 4. Sort into buckets
 - **Bucket 1, fully scriptable:** the state check plus the API scenarios cover every acceptance criterion that can be tested in the environment. Anything that can't be triggered safely there (outages, crashes, Sentry paths) is covered by the PR's tests; say so in the comment.
 - **Bucket 2, partly scriptable:** the scripted part, plus something only a browser shows (rendering, branding, the network tab, other apps).
 - **Bucket 3, fully manual.**
 
 Give the user the buckets, with one line of reasoning per ticket.
 
-### 4. Scenario runner
+### 5. Scenario runner
 Copy `templates/scenarios.py` and encode each ticket's spec scenarios as data. Find the spec in program-ops, as `/api-qa-execution` Phase 1 does.
 
 **Payloads and grading follow `/api-qa-execution`.** Use Phase 2 for payloads (ages, flags, insurance, counties, federal programs) and Phase 3 for grading (outcomes, value tolerance, `missing_programs`, ERROR and BLOCKED). The template already implements them. When the two disagree, `/api-qa-execution` wins, so fix the template.
@@ -103,14 +125,14 @@ Batch-specific conventions:
 - **Known PolicyEngine failures count as passing.** If a scenario fails only because of a PolicyEngine issue that's already reported (a strict xfail in the PR's tests, matching the local baseline), the ticket passes, provided there are 0 ERROR rows (no 4xx or 5xx) and no failures outside the known set. List those failures in the comment as open upstream. A new failure or any ERROR means the ticket doesn't pass.
 - **Test the runner on staging before it counts:**
   - **prod:** run it against staging as a rehearsal. Staging has the same code and a working key. Tell the user this tested the script, not prod. Every scenario should pass there, so a prod FAIL points at prod.
-  - **staging:** the staging run is the test. A local dry run only proves the script works, because local data is unreliable (see step 2). Don't start a local server or switch rows on just to make it pass.
+  - **staging:** the staging run is the test. A local dry run only proves the script works, because local data is unreliable (see step 3). Don't start a local server or switch rows on just to make it pass.
 
-### 5. Move bucket 1 on as it passes
+### 6. Move bucket 1 on as it passes
 When every check passes, post the comment and move the ticket (**prod:** Done; **staging:** Ready for Release) without checking in first; running the skill is the go-ahead. On any FAIL or ERROR, leave the ticket in its QA column, post nothing, and diagnose it with the user.
 
 When you report a failure, give the technical cause, a plain-language version, and the household from the scenario that shows it.
 
-### 6. Bucket 2/3 manual steps
+### 7. Bucket 2/3 manual steps
 List them per ticket, numbered. Each step has:
 - the exact URL in the environment, with `test=true` (`?test` for the tax apps);
 - the household to enter;
@@ -126,9 +148,10 @@ Things that cost time:
 
 Wait for the user's results. Then post one combined scripted + manual comment per ticket and move the ticket on. Move tickets one at a time as results come in; don't wait for the whole batch.
 
-### 7. Comment format
+### 8. Comment format
 Head the comment **Prod QA passed (date)** or **Staging QA passed (date)**, then list:
 - what shipped: the PRs, plus **prod:** the release tag and deploy date, or **staging:** the merge commit and staging deploy date;
+- the program import (staging: created, updated or already current; prod: run by the user);
 - the state check results;
 - the scenario counts and the key values, quoting the spec's figures rather than a bare section number;
 - skipped scenarios and why;
@@ -145,7 +168,7 @@ Facts only, no screen UUIDs needed, no real household data.
   - Switch to `main` and run `npm ci`.
   - Pass env vars inline; never write a `.env`. First list every variable the app imports (`git grep -hoE 'PUBLIC_[A-Z_]+' -- src` for Baby Ben, `'VITE_[A-Z_]+'` for co-tax). Both need the frontend domain as well as the API domain and key.
   - Open the app with `?test` so screens are test screens.
-- **prod, prod-only 502 from an upstream API:** run the same request on staging. If staging passes, the cause is prod config, usually the upstream key or its billing. Hand the user a shell snippet that calls the upstream and prints its status and error message, never the key.
+- **prod, prod-only 502 from an upstream API:** run the same request on staging. If staging passes and runs the same code, suspect prod config, usually the upstream key or its billing, but rerun first to rule out a brief upstream error. Hand the user a shell snippet that calls the upstream and prints its status and error message, never the key.
 - **Brief third-party errors** (e.g. Rewiring America `third_party_error`): rerun before calling it a failure.
 
 ## Finish

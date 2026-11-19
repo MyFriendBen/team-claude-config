@@ -49,8 +49,9 @@ def check_url_status(url):
         return f'EXCEPTION: {str(e)[:50]}'
 
 def main():
-    input_file = '/Users/jm/code/mfb/programs_export.csv'
-    output_file = '/Users/jm/code/mfb/programs_export_with_status.csv'
+    # Run from the folder holding the export (the workspace root, where Phase 1 writes it).
+    input_file = 'programs_export.csv'
+    output_file = 'programs_export_with_status.csv'
 
     with open(input_file, 'r', encoding='utf-8') as infile, \
          open(output_file, 'w', encoding='utf-8', newline='') as outfile:
