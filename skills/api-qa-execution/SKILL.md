@@ -22,7 +22,7 @@ Use it for eligibility and value. What the results page shows (copy, warnings, n
 5. Compares the actual eligibility and value with the spec.
 6. Writes results to the local `qa/` directory, including the frontend-only scenarios that need a browser check.
 
-**Production is never called from here.** `production` writes the script and expected results for David to run (see Environment Configuration).
+**Production is never called from here.** `production` writes the script and expected results for the user to run (see Environment Configuration).
 
 ---
 
@@ -48,7 +48,7 @@ If Linear MCP is not available, STOP and notify the user.
 ```
 /api-qa-execution MFB-1234
 /api-qa-execution MFB-1234 staging
-/api-qa-execution MFB-1234 production    # writes the script; David runs it
+/api-qa-execution MFB-1234 production    # writes the script; the user runs it
 /api-qa-execution MFB-1234 local qa-results
 ```
 
@@ -60,7 +60,7 @@ If Linear MCP is not available, STOP and notify the user.
 |---|---|---|
 | **staging** (default) | `https://cobenefits-api-staging.herokuapp.com` | `STAGING_API_KEY` from the workspace `.env` (`~/main/.env`) |
 | **local** | `http://localhost:8000` | The DRF auth token in the local database (below) |
-| **production** | Handed over, never called | David supplies it when he runs the script |
+| **production** | Handed over, never called | The user supplies it when they run the script |
 
 **⚠️ The frontend and backend are separate Heroku apps.** `benefits-calculator-staging.herokuapp.com` is the React SPA, and every path there returns `index.html`. The API is `cobenefits-api-staging.herokuapp.com`.
 
@@ -75,7 +75,7 @@ If Linear MCP is not available, STOP and notify the user.
 
 **Production: hand over, never run.** Don't send any request to production (`cobenefits-api`), read-only or not. For `production`:
 1. Write the script (Phase 3) with the expected results in it, reading the key from `PRODUCTION_API_KEY` and asking him to type `prod` before it sends anything.
-2. Hand David the script and the command to run it. He runs it and shares the report.
+2. Hand the user the script and the command to run it. They run it and share the report.
 
 ---
 

@@ -65,7 +65,7 @@ A family's base is `cross_white_label/{family}/base.py`. When a new MFB base rep
 
 Read the spec carefully. Its eligibility criteria, benefit value and data gaps drive every decision here.
 
-If a rule looks too broad or too narrow (e.g. no lower age, so a newborn qualifies), read the source the spec cites before raising it, and quote that text to David along with your concern.
+If a rule looks too broad or too narrow (e.g. no lower age, so a newborn qualifies), read the source the spec cites before raising it, and quote that text to the user along with your concern.
 
 ### 2.1 Study existing patterns
 
@@ -473,7 +473,7 @@ Known gap: a browser tab loaded before the switch can save a retired state name 
 
 ### 6.3 Release sequence
 
-Per environment, in this order (production commands are handed to David):
+Per environment, in this order (production commands are handed to the user):
 
 1. **Merge PR 1.** Staging deploys it. It reaches prod in the next weekly release (N).
 2. **Import the federal row, switched off,** once PR 1 is live in that environment: `python3 scripts/import_programs.py --env staging --program {key}`, and later `--env prod`. Leave it off.
@@ -500,7 +500,7 @@ Before opening or updating a PR, and again before saying it's ready to merge:
    - **A federal replacement:** the 6.3 sequence, with PR 1 and PR 2 each describing their place in it.
 
    A program-ops PR (spec, record or decisions.md changes) uses program-ops' own `.github/pull_request_template.md`, title shape included (`spec(nslp): … — MFB-1234`). First run, on each changed spec directory: `check_spec.py <dir> [<base_dir>]`, `check_fields.py <dir>`, `check_citations.py <dir>` and `render_structure.py <dir> --check`. `check_fields.py` writes `reference/screener-fields/<today>.md`; don't commit it.
-4. Push, say CI is running, and don't watch it. **Never merge unless David explicitly asks.**
+4. Push, say CI is running, and don't watch it. **Never merge unless the user explicitly asks.**
 
 Summarize:
 - the files created or changed;
