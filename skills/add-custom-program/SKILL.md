@@ -483,7 +483,7 @@ Per environment, in this order (production commands are handed to David):
 ### 6.4 Cleanup ticket (after PR 2 is live in prod)
 
 Create it when PR 1 opens, blocked by the program's ticket (model: MFB-2376). It covers:
-- deleting the state calculators, their tests, old benefits-api specs, `_initial_config.json` files and `readd_programs.py` entries, plus the PolicyEngine inputs only they used;
+- deleting the state calculators, their tests, old benefits-api specs and `_initial_config.json` files, plus the PolicyEngine inputs only they used;
 - repointing tests that use a state fixture;
 - restoring state navigators and warnings on the federal row (6.1).
 
