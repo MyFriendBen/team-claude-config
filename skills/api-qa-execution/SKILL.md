@@ -22,6 +22,8 @@ Use it for eligibility and value. What the results page shows (copy, warnings, n
 5. Compares the actual eligibility and value with the spec.
 6. Writes results to the local `qa/` directory, including the frontend-only scenarios that need a browser check.
 
+`<mfb-workspace>` below is the folder that holds your `benefits-api`, `program-ops` and `.claude`: the one passed to `setup.sh`.
+
 **Production is never called from here.** `production` writes the script and expected results for the user to run (see Environment Configuration).
 
 ---
@@ -58,14 +60,14 @@ If Linear MCP is not available, STOP and notify the user.
 
 | Environment | API Base URL | API Key |
 |---|---|---|
-| **staging** (default) | `https://cobenefits-api-staging.herokuapp.com` | `STAGING_API_KEY` from the workspace `.env` (`~/main/.env`) |
+| **staging** (default) | `https://cobenefits-api-staging.herokuapp.com` | `STAGING_API_KEY` from `<mfb-workspace>/.env` |
 | **local** | `http://localhost:8000` | The DRF auth token in the local database (below) |
 | **production** | Handed over, never called | The user supplies it when they run the script |
 
 **⚠️ The frontend and backend are separate Heroku apps.** `benefits-calculator-staging.herokuapp.com` is the React SPA, and every path there returns `index.html`. The API is `cobenefits-api-staging.herokuapp.com`.
 
 **API keys: read them in-process and never echo, log or write them.**
-- **Staging:** parse `STAGING_API_KEY` from `~/main/.env` inside the script, or export it from that file in the same shell command that runs the script. There's no skill-local `.env`. Never edit any `.env` file.
+- **Staging:** parse `STAGING_API_KEY` from `<mfb-workspace>/.env` inside the script, or export it from that file in the same shell command that runs the script. There's no skill-local `.env`. Never edit any `.env` file.
 - **Local:** `REACT_APP_API_KEY` from `benefits-calculator/.env` returns 403 locally. Pull a token from the local database into an environment variable without printing it:
   ```bash
   export LOCAL_API_KEY=$(venv/bin/python manage.py shell -c "from rest_framework.authtoken.models import Token; t = Token.objects.order_by('created').first(); print(t.key if t else '')" 2>/dev/null | tail -1)
@@ -74,7 +76,7 @@ If Linear MCP is not available, STOP and notify the user.
 - If no key resolves, ask the user.
 
 **Production: hand over, never run.** Don't send any request to production (`cobenefits-api`), read-only or not. For `production`:
-1. Write the script (Phase 3) with the expected results in it, reading the key from `PRODUCTION_API_KEY` and asking him to type `prod` before it sends anything.
+1. Write the script (Phase 3) with the expected results in it, reading the key from `PRODUCTION_API_KEY` and asking the user to type `prod` before it sends anything.
 2. Hand the user the script and the command to run it. They run it and share the report.
 
 ---
@@ -91,8 +93,8 @@ If Linear MCP is not available, STOP and notify the user.
 
 4. **Find the spec in program-ops.** It's the source of truth in every environment; don't use a Linear attachment or a copy in benefits-api.
    ```bash
-   git -C ~/main/program-ops fetch -q origin
-   git -C ~/main/program-ops grep -l "Program Key\*\*: \`{key}\`" origin/main -- 'programs/**/*_spec.md'
+   git -C <mfb-workspace>/program-ops fetch -q origin
+   git -C <mfb-workspace>/program-ops grep -l "Program Key\*\*: \`{key}\`" origin/main -- 'programs/**/*_spec.md'
    ```
    - Specs sit beside their program record: `programs/white_labels/{wl}/{program}/` or `programs/cross_white_label/{family}/{state|base}/`.
    - **Search by the Program Key line, not the file name.** File names don't always match the key: `head_start_nj_spec.md` has the key `nj_head_start`.
@@ -415,7 +417,7 @@ If the spec says "Birth month/year: June 2022", use `birth_month: 6, birth_year:
 
 ### Phase 3: Run the scenarios
 
-Write one Python script for the run, in `{output-dir}/{TICKET-ID}-{program_key}-qa.py` (`~/main/qa` unless the output-directory argument names another). Call the API with `curl` through `subprocess` (urllib fails Heroku's certificates). Follow these rules:
+Write one Python script for the run, in `{output-dir}/{TICKET-ID}-{program_key}-qa.py` (`<mfb-workspace>/qa` unless the output-directory argument names another). Call the API with `curl` through `subprocess` (urllib fails Heroku's certificates). Follow these rules:
 
 **Payloads**
 - One screen per scenario, sequentially: `POST /api/screens/` with `Content-Type: application/json` (curl's `-d` otherwise sends form encoding), then `GET /api/eligibility/{uuid}`.

@@ -220,6 +220,8 @@ def run_scenario(t: Ticket, s: S, offered: list[str]) -> tuple[str, str]:
     status, screen = request("POST", "/api/screens/", screen_payload(t, s, benefits, ids))
     if status in (401, 403):
         sys.exit(f"POST /api/screens/ returned {status}: check API_KEY")
+    if status == 0:
+        return "ERROR", "POST /api/screens/ got no HTTP response (network or timeout); rerun this scenario"
     if status != 201:
         return "ERROR", f"POST /api/screens/ returned {status}: {str(screen)[:300]}"
     if not isinstance(screen, dict) or not screen.get("uuid"):

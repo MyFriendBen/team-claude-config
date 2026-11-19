@@ -10,7 +10,7 @@ argument-hint: prod | staging
 
 Clear one of your QA columns in batches. Scripted checks come first and manual checks last. Every ticket moves on with a comment that says what was verified and how.
 
-"The user" below means whoever is running the skill.
+"The user" below means whoever is running the skill. `<mfb-workspace>` is the folder that holds the user's `benefits-api`, `program-ops` and `.claude` clones and config: the one passed to `setup.sh`. It isn't necessarily a git repo, so run git and `gh` against a named clone or repo, as the commands below do.
 
 ## Environment argument (required)
 
@@ -28,7 +28,7 @@ The argument must be exactly `prod` or `staging`. If it's missing or anything el
 
 Everything below applies to both, unless it's marked **prod** or **staging**.
 
-**Batch folder:** `qa/<env>-qa-<YYYY-MM-DD>/` in the workspace, created if missing. Add `-<ticket>` for a single-ticket run (`qa/staging-qa-2026-11-19-mfb-1234/`). Every script, output file and results note for the batch goes there.
+**Batch folder:** `<mfb-workspace>/qa/<env>-qa-<YYYY-MM-DD>/`, created if missing. Add `-<ticket>` for a single-ticket run (`qa/staging-qa-2026-11-19-mfb-1234/`). Every script, output file and results note for the batch goes there.
 
 **Templates:** start from `${CLAUDE_SKILL_DIR}/templates/`. Copy them into the batch folder; don't write them from scratch.
 - `preflight.py` is the read-only state check, run in a Django shell.
@@ -44,7 +44,11 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 - Say up front that this is the flow. Don't ask how to handle prod each time.
 
 **staging:** Claude runs everything itself: the state check via `heroku run` on `cobenefits-api-staging`, and the scenarios over HTTP.
-- **API key:** read it in-process from wherever the user keeps it (an environment variable or the workspace `.env`), in the same command that runs the script. Never echo, log or write it, and never edit a `.env` file. If you can't find it, ask.
+- **API key:** `STAGING_API_KEY` in `<mfb-workspace>/.env`, the same key `/api-qa-execution` uses. The runner reads `API_KEY`, so pass the key in the same command that runs it, without printing it:
+  ```
+  API_KEY="$(grep '^STAGING_API_KEY=' <mfb-workspace>/.env | cut -d= -f2-)" API_BASE=https://cobenefits-api-staging.herokuapp.com python3 scenarios.py <TICKET>
+  ```
+  Never echo, log or write the key, and never edit a `.env` file. If it isn't there, ask the user where they keep it.
 - **Read-only:** scripts stay read-only even though staging allows writes. The program import in step 2 is the one exception. Any other data change, such as activating a program, is the user's call.
 
 ## Steps
@@ -52,8 +56,8 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 ### 1. Gather
 - Run `list_issues(assignee="me", state="Prod QA" | "Staging QA")`, then `get_issue` on each one for the description, attachments, acceptance criteria and open checkboxes. Read the comments with `list_comments`.
 - For every linked PR, check that it's deployed to the environment:
-  - **prod:** it's in the latest prod release. Prod deploys come from GitHub releases (`gh release list`). Check with `git merge-base --is-ancestor <merge-sha> <release-tag>`.
-  - **staging:** it's merged to `main`, and a `Deploy to Staging` run succeeded on or after the merge commit (`gh run list --workflow deploy-staging.yml --branch main`). A failed staging deploy leaves the previous build up.
+  - **prod:** it's in the latest prod release. Prod deploys come from GitHub releases. Check with `git -C <mfb-workspace>/<repo> fetch -q --tags origin && git -C <mfb-workspace>/<repo> merge-base --is-ancestor <merge-sha> <release-tag>`, and list releases with `gh release list --repo MyFriendBen/<repo>`.
+  - **staging:** it's merged to `main`, and a `Deploy to Staging` run succeeded on or after the merge commit (`gh run list --repo MyFriendBen/<repo> --workflow deploy-staging.yml --branch main`). A failed staging deploy leaves the previous build up.
   - **Baby Ben** (family-affordability-tax-credit-calculator): `gh api repos/MyFriendBen/family-affordability-tax-credit-calculator/deployments`. The environments are `baby-ben` and `baby-ben-staging`.
   - **co-tax-credit-calculator:** it has no GitHub deployments. It deploys by pushing to Heroku (see its README), so ask the user if you can't confirm what's live.
 - An unmerged or undeployed PR means the ticket isn't ready. Say so instead of testing it.
@@ -63,13 +67,13 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 A ticket is a program ticket when it adds or changes one program, named by its program key: a white label code, an underscore, and an abbreviated program name (`nj_head_start`, `co_snap`, `federal_ssdi`). Find the key in the ticket's title, description or linked PRs. Confirm that its record is on program-ops `main`, because staging and prod import only merged records:
 
 ```
-git -C <workspace>/program-ops fetch -q origin
-git -C <workspace>/program-ops ls-tree -r --name-only origin/main | grep '/<key>_program_record.json$'
+git -C <mfb-workspace>/program-ops fetch -q origin
+git -C <mfb-workspace>/program-ops ls-tree -r --name-only origin/main | grep '/<key>_program_record.json$'
 ```
 
 If there's no record on `main` (not merged yet, or the program has only a v2 spec), tell the user and skip the import for that ticket. If you can't tell which key a ticket is about, ask.
 
-**staging:** import each program before running anything else. Run these from `<workspace>/program-ops`:
+**staging:** import each program before running anything else. Run these from `<mfb-workspace>/program-ops`:
 1. Dry run: `python3 scripts/import_programs.py --env staging --dry-run-only --program <key>`.
 2. Read the summary counts:
    - **`Failed`, `Waiting`, `Conflicts`, `Admin edits kept` or `Not applied yet` above 0:** stop and show the user that part of the output. `Waiting` means the calculator hasn't deployed. The others need a person to decide which value wins.
@@ -92,7 +96,7 @@ Copy `templates/preflight.py` and add one block per ticket covering every row it
 It prints `PASS/FAIL/INFO [ticket] …` and a summary.
 
 ```
-cd <workspace>/benefits-api && heroku run --no-tty -a <heroku app> "python manage.py shell" < <batch folder>/preflight.py
+cd <mfb-workspace>/benefits-api && heroku run --no-tty -a <heroku app> "python manage.py shell" < <batch folder>/preflight.py
 ```
 
 Keep `--no-tty`; without it the shell reads the file line by line and the summary is wrong. Quote the management command, or its flags collide with `heroku run`'s own.
@@ -118,6 +122,7 @@ Batch-specific conventions:
 - **Current benefits:** resolve each one against `GET /api/screener-options/<wl>/has-benefits-programs/`.
   - Name not offered → **SKIP**, with the reason. The comment names it as covered by unit tests only.
   - `=name` sends a known row directly. Flag that it isn't in the has-benefits step, because a real household can't report it.
+- **No HTTP response (status 0)** is a network blip, not an API answer. Rerun that scenario alone before reporting it.
 - **400 on POST** means the payload is wrong, not the program. The API rejects a ZIP or county the white label doesn't serve ("Did you mean 'Essex County'?") and any value the screener doesn't send (relationship, income or expense type). Fix the payload and rerun.
 - **A program absent with `missing_programs: true`** is an ERROR, not a FAIL. On staging, `why_dropped(<screen uuid>)` in the preflight template reads the screen's `EligibilitySnapshot.dropped_programs` and names the reason.
 - **Federal programs:** also smoke-test a few scenarios on white labels that newly gain the program (e.g. `co_tax_calculator`, `_default`), plus one or two states.
@@ -172,7 +177,7 @@ Facts only, no screen UUIDs needed, no real household data.
 - **Brief third-party errors** (e.g. Rewiring America `third_party_error`): rerun before calling it a failure.
 
 ## Finish
-- Move the batch folder to `qa/archive/`.
+- Move the batch folder to `<mfb-workspace>/qa/archive/`.
 - Report:
   - the tickets moved on;
   - anything left in the QA column, and why;

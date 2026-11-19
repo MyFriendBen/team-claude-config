@@ -1,6 +1,6 @@
 # QA state check. READ-ONLY: no saves, no deletes.
 #
-#   cd <workspace>/benefits-api
+#   cd <mfb-workspace>/benefits-api
 #   heroku run --no-tty -a <heroku app> "python manage.py shell" < <batch folder>/preflight.py
 #
 # Locally: python manage.py shell < <batch folder>/preflight.py (local data can be stale; a
