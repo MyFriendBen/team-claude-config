@@ -19,14 +19,14 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
 
 1. **Check project location**
    ```bash
-   cd <mfb-workspace>
+   cd "<mfb-workspace>"
    ```
 
 2. **Present SQL query for user execution**
    - Read the query from `${CLAUDE_SKILL_DIR}/templates/export_programs.sql`
    - Provide the user with the command to execute:
      ```bash
-     psql "$DATABASE_URL" -f ${CLAUDE_SKILL_DIR}/templates/export_programs.sql --csv -o programs_export.csv
+     psql "$DATABASE_URL" -f ${CLAUDE_SKILL_DIR}/templates/export_programs.sql --csv -o "<mfb-workspace>/programs_export.csv"
      ```
    - Wait for user to run the command and confirm CSV is generated
    - Filter for `language_code = 'en-us'`
@@ -51,7 +51,7 @@ Audits all program `learn_more_link` URLs in the database, identifies broken lin
 ### Phase 2: Check Link Status (Automated)
 
 1. **Check HTTP status of each link**
-   - Use the existing `${CLAUDE_SKILL_DIR}/templates/check_link_status.py` script OR
+   - Use the existing script, passing the export's path: `python3 ${CLAUDE_SKILL_DIR}/templates/check_link_status.py "<mfb-workspace>/programs_export.csv"` (it writes `programs_export_with_status.csv` beside it) OR
    - Implement inline using requests library
    - For each URL:
      - **Skip if URL is empty or blank** - leave link_status empty

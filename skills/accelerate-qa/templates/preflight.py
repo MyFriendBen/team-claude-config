@@ -100,6 +100,11 @@ def config_data(white_label: str, name: str) -> Any:
     return json.loads(cfg.data) if isinstance(cfg.data, str) else cfg.data
 
 
+def navigators(p: Program) -> list[str]:
+    """The program's navigators in display order. `navigators_ordered` is current; `navigator` is legacy."""
+    return list(p.navigators_ordered.values_list("external_name", flat=True))
+
+
 def why_dropped(uuid: str) -> None:
     """Print why programs were left out of a screen's latest results (`missing_programs: true`)."""
     snap = EligibilitySnapshot.objects.filter(screen__uuid=uuid).order_by("-submission_date").first()

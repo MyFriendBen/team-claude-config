@@ -46,17 +46,17 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 **staging:** Claude runs everything itself: the state check via `heroku run` on `cobenefits-api-staging`, and the scenarios over HTTP.
 - **API key:** `STAGING_API_KEY` in `<mfb-workspace>/.env`, the same key `/api-qa-execution` uses. The runner reads `API_KEY`, so pass the key in the same command that runs it, without printing it:
   ```
-  API_KEY="$(grep '^STAGING_API_KEY=' <mfb-workspace>/.env | cut -d= -f2-)" API_BASE=https://cobenefits-api-staging.herokuapp.com python3 scenarios.py <TICKET>
+  API_KEY="$(grep '^STAGING_API_KEY=' "<mfb-workspace>/.env" | cut -d= -f2-)" API_BASE=https://cobenefits-api-staging.herokuapp.com python3 scenarios.py <TICKET>
   ```
   Never echo, log or write the key, and never edit a `.env` file. If it isn't there, ask the user where they keep it.
-- **Read-only:** scripts stay read-only even though staging allows writes. The program import in step 2 is the one exception. Any other data change, such as activating a program, is the user's call.
+- **Read-only:** scripts stay read-only even though staging allows writes. There are two exceptions: the program import in step 2, and the test screens (`is_test: true`) the scenario runner creates, one per scenario. Any other data change, such as activating a program, is the user's call.
 
 ## Steps
 
 ### 1. Gather
 - Run `list_issues(assignee="me", state="Prod QA" | "Staging QA")`, then `get_issue` on each one for the description, attachments, acceptance criteria and open checkboxes. Read the comments with `list_comments`.
 - For every linked PR, check that it's deployed to the environment:
-  - **prod:** it's in the latest prod release. Prod deploys come from GitHub releases. Check with `git -C <mfb-workspace>/<repo> fetch -q --tags origin && git -C <mfb-workspace>/<repo> merge-base --is-ancestor <merge-sha> <release-tag>`, and list releases with `gh release list --repo MyFriendBen/<repo>`.
+  - **prod:** it's in the latest prod release. Prod deploys come from GitHub releases. Check with `git -C "<mfb-workspace>/<repo>" fetch -q --tags origin && git -C "<mfb-workspace>/<repo>" merge-base --is-ancestor <merge-sha> <release-tag>`, and list releases with `gh release list --repo MyFriendBen/<repo>`.
   - **staging:** it's merged to `main`, and a `Deploy to Staging` run succeeded on or after the merge commit (`gh run list --repo MyFriendBen/<repo> --workflow deploy-staging.yml --branch main`). A failed staging deploy leaves the previous build up.
   - **Baby Ben** (family-affordability-tax-credit-calculator): `gh api repos/MyFriendBen/family-affordability-tax-credit-calculator/deployments`. The environments are `baby-ben` and `baby-ben-staging`.
   - **co-tax-credit-calculator:** it has no GitHub deployments. It deploys by pushing to Heroku (see its README), so ask the user if you can't confirm what's live.
@@ -67,13 +67,13 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 A ticket is a program ticket when it adds or changes one program, named by its program key: a white label code, an underscore, and an abbreviated program name (`nj_head_start`, `co_snap`, `federal_ssdi`). Find the key in the ticket's title, description or linked PRs. Confirm that its record is on program-ops `main`, because staging and prod import only merged records:
 
 ```
-git -C <mfb-workspace>/program-ops fetch -q origin
-git -C <mfb-workspace>/program-ops ls-tree -r --name-only origin/main | grep '/<key>_program_record.json$'
+git -C "<mfb-workspace>/program-ops" fetch -q origin
+git -C "<mfb-workspace>/program-ops" ls-tree -r --name-only origin/main | grep '/<key>_program_record.json$'
 ```
 
-If there's no record on `main` (not merged yet, or the program has only a v2 spec), tell the user and skip the import for that ticket. If you can't tell which key a ticket is about, ask.
+If there's no record on `main` (not merged yet, or the program has only a v2 spec), the program change hasn't shipped. Stop that ticket: leave it in its QA column, tell the user, and go on with the others. If you can't tell which key a ticket is about, ask.
 
-**staging:** import each program before running anything else. Run these from `<mfb-workspace>/program-ops`:
+**staging:** import each program before running anything else. Run these from `<mfb-workspace>/program-ops` (quote the path if it has spaces):
 1. Dry run: `python3 scripts/import_programs.py --env staging --dry-run-only --program <key>`.
 2. Read the summary counts:
    - **`Failed`, `Waiting`, `Conflicts`, `Admin edits kept` or `Not applied yet` above 0:** stop and show the user that part of the output. `Waiting` means the calculator hasn't deployed. The others need a person to decide which value wins.
@@ -88,7 +88,7 @@ An import never switches a program on or off. A newly created program is inactiv
 ### 3. State check first (one read-only script for all tickets)
 Copy `templates/preflight.py` and add one block per ticket covering every row it touches:
 - migrations applied;
-- programs exist, are active, have a registered calculator and the right year;
+- programs exist, are active, have a registered calculator and the right year (`navigators(p)` lists navigators in display order);
 - replaced rows are inactive;
 - warnings and the programs they link;
 - referrers and config keys.
@@ -96,7 +96,7 @@ Copy `templates/preflight.py` and add one block per ticket covering every row it
 It prints `PASS/FAIL/INFO [ticket] …` and a summary.
 
 ```
-cd <mfb-workspace>/benefits-api && heroku run --no-tty -a <heroku app> "python manage.py shell" < <batch folder>/preflight.py
+cd "<mfb-workspace>/benefits-api" && heroku run --no-tty -a <heroku app> "python manage.py shell" < "<batch folder>/preflight.py"
 ```
 
 Keep `--no-tty`; without it the shell reads the file line by line and the summary is wrong. Quote the management command, or its flags collide with `heroku run`'s own.
@@ -129,7 +129,7 @@ Batch-specific conventions:
 - **PolicyEngine version:** staging and prod both ride PE `current`. A spec validated at `frontier` can fail its boundary scenarios until PE promotes. Rerun the failing screen with `?pe_version=frontier` before calling it a code bug.
 - **Known PolicyEngine failures count as passing.** If a scenario fails only because of a PolicyEngine issue that's already reported (a strict xfail in the PR's tests, matching the local baseline), the ticket passes, provided there are 0 ERROR rows (no 4xx or 5xx) and no failures outside the known set. List those failures in the comment as open upstream. A new failure or any ERROR means the ticket doesn't pass.
 - **Test the runner on staging before it counts:**
-  - **prod:** run it against staging as a rehearsal. Staging has the same code and a working key. Tell the user this tested the script, not prod. Every scenario should pass there, so a prod FAIL points at prod.
+  - **prod:** run it against staging as a rehearsal. Staging runs `main`, which is the same as or newer than prod's release; compare the two deploys before reading a prod result against it. Tell the user this tested the script, not prod. Every scenario should pass there, so a prod FAIL points at prod.
   - **staging:** the staging run is the test. A local dry run only proves the script works, because local data is unreliable (see step 3). Don't start a local server or switch rows on just to make it pass.
 
 ### 6. Move bucket 1 on as it passes

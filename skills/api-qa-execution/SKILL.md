@@ -93,8 +93,8 @@ If Linear MCP is not available, STOP and notify the user.
 
 4. **Find the spec in program-ops.** It's the source of truth in every environment; don't use a Linear attachment or a copy in benefits-api.
    ```bash
-   git -C <mfb-workspace>/program-ops fetch -q origin
-   git -C <mfb-workspace>/program-ops grep -l "Program Key\*\*: \`{key}\`" origin/main -- 'programs/**/*_spec.md'
+   git -C "<mfb-workspace>/program-ops" fetch -q origin
+   git -C "<mfb-workspace>/program-ops" grep -l "Program Key\*\*: \`{key}\`" origin/main -- 'programs/**/*_spec.md'
    ```
    - Specs sit beside their program record: `programs/white_labels/{wl}/{program}/` or `programs/cross_white_label/{family}/{state|base}/`.
    - **Search by the Program Key line, not the file name.** File names don't always match the key: `head_start_nj_spec.md` has the key `nj_head_start`.

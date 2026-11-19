@@ -4,6 +4,8 @@ Check HTTP status of all learn_more_link URLs in the CSV
 """
 
 import csv
+import sys
+
 import requests
 from urllib.parse import urlparse
 
@@ -49,9 +51,11 @@ def check_url_status(url):
         return f'EXCEPTION: {str(e)[:50]}'
 
 def main():
-    # Run from the folder holding the export (the workspace root, where Phase 1 writes it).
-    input_file = 'programs_export.csv'
-    output_file = 'programs_export_with_status.csv'
+    # Usage: check_link_status.py <export.csv> [<output.csv>]. Pass the same path Phase 1 wrote.
+    if len(sys.argv) < 2:
+        sys.exit("usage: check_link_status.py <programs_export.csv> [<programs_export_with_status.csv>]")
+    input_file = sys.argv[1]
+    output_file = sys.argv[2] if len(sys.argv) > 2 else input_file.replace('.csv', '_with_status.csv')
 
     with open(input_file, 'r', encoding='utf-8') as infile, \
          open(output_file, 'w', encoding='utf-8', newline='') as outfile:

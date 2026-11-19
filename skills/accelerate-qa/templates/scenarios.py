@@ -247,7 +247,7 @@ def run_scenario(t: Ticket, s: S, offered: list[str]) -> tuple[str, str]:
         got, eligible, value, by_id = "not found", False, None, {}
     else:
         eligible = bool(program["eligible"]) and not program.get("already_has")
-        value = program["estimated_value"]
+        value = program.get("estimated_value")
         got = f"eligible={program['eligible']} already_has={program.get('already_has', False)} value={value}"
         by_id = {m["frontend_id"]: m for m in program.get("members", [])}
 
@@ -255,7 +255,7 @@ def run_scenario(t: Ticket, s: S, offered: list[str]) -> tuple[str, str]:
     if eligible != s.eligible:
         problems.append(f"expected eligible={s.eligible}")
     if s.eligible and s.value is not None and program is not None:
-        if not isinstance(value, (int, float)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             problems.append(f"expected value={s.value}, got no numeric value")
         elif abs(value - s.value) > s.units:
             problems.append(f"expected value={s.value} (±{s.units})")
