@@ -4,6 +4,7 @@ Check HTTP status of all learn_more_link URLs in the CSV
 """
 
 import csv
+import os
 import sys
 
 import requests
@@ -55,7 +56,14 @@ def main():
     if len(sys.argv) < 2:
         sys.exit("usage: check_link_status.py <programs_export.csv> [<programs_export_with_status.csv>]")
     input_file = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) > 2 else input_file.replace('.csv', '_with_status.csv')
+    if len(sys.argv) > 2:
+        output_file = sys.argv[2]
+    else:
+        base, ext = os.path.splitext(input_file)
+        output_file = f"{base}_with_status{ext or '.csv'}"
+    # Opening the output for writing first would truncate the input before it's read.
+    if os.path.realpath(output_file) == os.path.realpath(input_file):
+        sys.exit(f"output path {output_file} is the input file; pass a different output path")
 
     with open(input_file, 'r', encoding='utf-8') as infile, \
          open(output_file, 'w', encoding='utf-8', newline='') as outfile:

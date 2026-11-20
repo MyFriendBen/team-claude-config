@@ -101,8 +101,9 @@ def config_data(white_label: str, name: str) -> Any:
 
 
 def navigators(p: Program) -> list[str]:
-    """The program's navigators in display order. `navigators_ordered` is current; `navigator` is legacy."""
-    return list(p.navigators_ordered.values_list("external_name", flat=True))
+    """The program's navigators in display order: the ProgramNavigator through rows by (order, id),
+    as the API reads them. The `navigator` relation is legacy."""
+    return list(p.program_navigators.order_by("order", "id").values_list("navigator__external_name", flat=True))
 
 
 def why_dropped(uuid: str) -> None:
