@@ -145,6 +145,8 @@ List them per ticket, numbered. Each step has:
 - a concrete **Pass:** line (exact copy, dollar value, request method, empty grep output).
 
 Things that cost time:
+- **Results pages without re-entering households:** each scenario screen opens directly at `<screener>/<wl>/<screen uuid>/results/benefits`. Take the UUIDs from the runner's output.
+- **One button on the program details page:** it's the apply button (`apply_button_link`), labelled with `apply_button_description` or "Apply Online" when that's blank. `learn_more_link` isn't on the results pages; it's the program-name link on `<screener>/<wl>/current-benefits`. Write **Pass:** lines to match.
 - **staging:** the screener is `benefits-calculator-staging.herokuapp.com`; the API host serves no pages.
 - **Partner links:** use `?referrer=<code>&test=true`. Adding `referrer=test` as well overwrites the partner attribution.
 - **Feature flags:** before failing a missing UI element, check that its flag is on for that white label. Some results-page features render only where their flag is set.
