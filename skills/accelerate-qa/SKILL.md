@@ -54,7 +54,9 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 ## Steps
 
 ### 1. Gather
-- Run `list_issues(assignee="me", state="Prod QA" | "Staging QA")`, then `get_issue` on each one for the description, attachments, acceptance criteria and open checkboxes. Read the comments with `list_comments`.
+- Run `list_issues(assignee="me", state="Prod QA" | "Staging QA")`, then `get_issue` on each one for the description, attachments, acceptance criteria and open checkboxes. Read every comment with `list_comments`, following the cursor through every page, and open the related, parent and blocking tickets the same way.
+- **Flag decision-changing comments before testing.** A comment or related ticket that changes scope, a rule or an expected value is a decision. Check whether the linked PRs implement it. List each one for the user with the ticket, the comment's author and date, what it decided and whether the PR handles it, and wait for their call before testing that ticket. A decision the PR doesn't implement isn't a pass.
+- **Capture extra checks from comments.** Comments often name things worth testing that aren't in the acceptance criteria (an edge case found during a local test, a household that misbehaved). Add each one to the ticket's checks, scripted or manual, and name where it came from.
 - For every linked PR, check that it's deployed to the environment:
   - **prod:** it's in the latest prod release. Prod deploys come from GitHub releases. Check with `git -C "<mfb-workspace>/<repo>" fetch -q --tags origin && git -C "<mfb-workspace>/<repo>" merge-base --is-ancestor <merge-sha> <release-tag>`, and list releases with `gh release list --repo MyFriendBen/<repo>`.
   - **staging:** it's merged to `main`, and a `Deploy to Staging` run succeeded on or after the merge commit (`gh run list --repo MyFriendBen/<repo> --workflow deploy-staging.yml --branch main`). A failed staging deploy leaves the previous build up.
@@ -106,6 +108,8 @@ Keep `--no-tty`; without it the shell reads the file line by line and the summar
 - **Missing or out-of-date program after step 2:** check the import output first. A program can only be imported once its calculator has deployed. Report anything left over; don't import beyond step 2 unasked.
 
 ### 4. Sort into buckets
+Sort on the acceptance criteria plus the extra checks from step 1.
+
 - **Bucket 1, fully scriptable:** the state check plus the API scenarios cover every acceptance criterion that can be tested in the environment. Anything that can't be triggered safely there (outages, crashes, Sentry paths) is covered by the PR's tests; say so in the comment.
 - **Bucket 2, partly scriptable:** the scripted part, plus something only a browser shows (rendering, branding, the network tab, other apps).
 - **Bucket 3, fully manual.**
@@ -164,6 +168,7 @@ Head the comment **Prod QA passed (date)** or **Staging QA passed (date)**, then
 - skipped scenarios and why;
 - known PolicyEngine failures left open upstream, if any;
 - manual steps confirmed;
+- checks added from comments, each with its source, and how comment decisions were resolved;
 - anything not testable in the environment, and what covers it;
 - any acceptance-criteria item still open (named, not hidden).
 
