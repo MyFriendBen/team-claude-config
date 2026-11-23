@@ -54,7 +54,7 @@ Everything below applies to both, unless it's marked **prod** or **staging**.
 ## Steps
 
 ### 1. Gather
-- Run `list_issues(assignee="me", state="Prod QA" | "Staging QA")`, then `get_issue` on each one for the description, attachments, acceptance criteria and open checkboxes. Read every comment with `list_comments`, following the cursor through every page, and open the related, parent and blocking tickets the same way.
+- Run `list_issues(assignee="me", state="Prod QA" | "Staging QA")`, then `get_issue` with `includeRelations: true` on each one for the description, attachments, acceptance criteria, open checkboxes and relations. Read every comment with `list_comments`, following the cursor through every page, and open the related, parent and blocking tickets the same way.
 - **Flag decision-changing comments before testing.** A comment or related ticket that changes scope, a rule or an expected value is a decision. Check whether the linked PRs implement it. List each one for the user with the ticket, the comment's author and date, what it decided and whether the PR handles it, and wait for their call before testing that ticket. A decision the PR doesn't implement isn't a pass.
 - **Capture extra checks from comments.** Comments often name things worth testing that aren't in the acceptance criteria (an edge case found during a local test, a household that misbehaved). Add each one to the ticket's checks, scripted or manual, and name where it came from.
 - For every linked PR, check that it's deployed to the environment:
