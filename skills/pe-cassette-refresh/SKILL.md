@@ -91,7 +91,7 @@ cd "$WT"
 "$PY" manage.py record_and_diff --target "$CURRENT" --out "$RUN/current" --adopt
 ```
 
-`--adopt` moves `PE_TEST_VERSION` to `CURRENT`, copies in the new cassettes of every unchanged module and removes its pin, and pins every changed module at its old version with a reason. `diff.json` lists both under `adopt`. A pin is only ever module-level `PE_VERSION` / `PE_VERSION_REASON`: the command refuses to start if a test class sets `pe_version` itself, naming the file. Move that pin to the module constants (don't delete it) and rerun.
+`--adopt` moves `PE_TEST_VERSION` to `CURRENT`, copies in the new cassettes of every unchanged module and removes its pin, and pins every changed module at its old version with a reason. `diff.json` lists both under `adopt`. A module pinned ahead of `CURRENT` (e.g. at `frontier` to test a new input) is left as it is and listed under `ahead`; it catches up when the suite pin reaches it. A pin is only ever module-level `PE_VERSION = "<version>"` / `PE_VERSION_REASON = "<why>"`: the command refuses to start if a test class sets `pe_version`, or a constant is annotated, commented, imported or set twice, naming the file. Rewrite that pin in the plain form (don't delete it) and rerun.
 
 **Current-pass changes are already live:** staging and prod serve `CURRENT` today. Frontier changes are coming.
 
@@ -149,7 +149,7 @@ Skip writes under `--dry-run`; print the drafts.
 - Body:
   - Header: run date, who ran it, `PIN` / `CURRENT` / `FRONTIER`, and the PR if Step 5 opened one.
   - **Live now (`CURRENT`)** and **Coming (`FRONTIER`)** sections. One subsection per program: a table of scenario / before / after, the class and its one-line reason, the spec citation, the PE changelog entry. For a no-spec finding, the class is "No spec: a person decides", the reason says what the test docstring expects, and the citation names the test (`<file>::<test>`) in place of a spec.
-  - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording. Adoption runs at `CURRENT`, so a held pin is older than `CURRENT` and PE no longer serves it. Say so: a PR that changes a held module's PE request body can't re-record it until the drift is reconciled. (A held pin PE still serves, e.g. from a manual `--adopt` at `frontier`, can be re-recorded at its pin.)
+  - **Held modules:** the modules `--adopt` pinned at their old version. Fixing one means reconciling its spec, then deleting its `PE_VERSION` / `PE_VERSION_REASON` and re-recording. Adoption runs at `CURRENT`, so a held pin is older than `CURRENT` and PE no longer serves it (modules pinned ahead aren't held; list them separately from `ahead`). Say so: a PR that changes a held module's PE request body can't re-record it until the drift is reconciled. (A held pin PE still serves, e.g. from a manual `--adopt` at `frontier`, can be re-recorded at its pin.)
 
 **Urgent** (one per screener-breaking finding; never folded into the rollup):
 - Team **MFB General**, labels `PE Drift` and `Bug`, priority Urgent, title `PE drift: <program> breaks at PolicyEngine <version>`.
