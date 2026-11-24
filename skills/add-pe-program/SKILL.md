@@ -284,15 +284,11 @@ class Test{State}{Program}(PeIntegrationTestCase):   # the base class applies th
 Non-negotiables, each of which is what makes a cassette replayable:
 
 - **Explicit primary keys** on the screen and every member. The PolicyEngine request *and response* are keyed by member id, so auto-assigned pks produce a cassette that can't be replayed. Use the helpers; don't call `HouseholdMember.objects.create` directly.
-- **Record at a version PolicyEngine serves.** Tests follow the suite pin, `PE_TEST_VERSION` in `pe_integration.py`. If it equals the exact version `current` or `frontier` resolves to (`curl -s https://household.api.policyengine.org/versions/us`), set no `pe_version`. Otherwise PolicyEngine 422s at the suite pin: pin the module to the exact version `current` resolves to (never the literal `"current"`, which records a body that replays forever and hides drift), with a reason. Use exactly this layout, with no trailing comments on these lines, since `record_and_diff --adopt` finds and rewrites it by pattern. The constants go after the imports; the attributes go at the top of every class that subclasses `PeIntegrationTestCase` directly:
+- **Record at a version PolicyEngine serves.** Tests follow the suite pin, `PE_TEST_VERSION` in `pe_integration.py`. If it equals the exact version `current` or `frontier` resolves to (`curl -s https://household.api.policyengine.org/versions/us`), set no `pe_version`. Otherwise PolicyEngine 422s at the suite pin: pin the module to the exact version `current` resolves to (never the literal `"current"`, which records a body that replays forever and hides drift), with a reason. Pin only with these two module-level constants after the imports, with no trailing comments, since `record_and_diff --adopt` finds and rewrites them by pattern. They cover every test class in the module; never set `pe_version` or `pe_version_reason` on a class, which the harness rejects:
 
   ```python
   PE_VERSION = "2.18.0"
   PE_VERSION_REASON = "The suite pin isn't served; recorded at current. Remove both once PE_TEST_VERSION reaches it."
-
-  class Test{State}{Program}(PeIntegrationTestCase):
-      pe_version = PE_VERSION
-      pe_version_reason = PE_VERSION_REASON
   ```
 
   A pin that differs from `PE_TEST_VERSION` without a reason fails `setUp`. Don't bump `PE_TEST_VERSION`: every module following it would need re-recording. The weekly `/pe-cassette-refresh` run moves it.
