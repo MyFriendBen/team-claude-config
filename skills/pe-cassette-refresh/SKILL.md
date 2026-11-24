@@ -91,7 +91,7 @@ cd "$WT"
 "$PY" manage.py record_and_diff --target "$CURRENT" --out "$RUN/current" --adopt
 ```
 
-`--adopt` moves `PE_TEST_VERSION` to `CURRENT`, copies in the new cassettes of every unchanged module and removes its pin, and pins every changed module at its old version with a reason. `diff.json` lists both under `adopt`.
+`--adopt` moves `PE_TEST_VERSION` to `CURRENT`, copies in the new cassettes of every unchanged module and removes its pin, and pins every changed module at its old version with a reason. `diff.json` lists both under `adopt`. A pin is only ever module-level `PE_VERSION` / `PE_VERSION_REASON`: the command refuses to start if a test class sets `pe_version` itself, naming the file. Move that pin to the module constants (don't delete it) and rerun.
 
 **Current-pass changes are already live:** staging and prod serve `CURRENT` today. Frontier changes are coming.
 
